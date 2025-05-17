@@ -46,6 +46,11 @@ class ResultWidget(QWidget):
         
         self.setLayout(layout)
         self.setStyleSheet("""
+            QWidget {
+                background-image: url(../images/result_background.jpg);
+                background-repeat: no-repeat;
+                background-position: center;
+            }
             QLabel {
                 color: black;
             }

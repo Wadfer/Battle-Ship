@@ -532,48 +532,74 @@ class GameWindow(QMainWindow):
 
     def init_game_ui(self):
         layout = QHBoxLayout(self.game_widget)
-
-        # Create player's board
-        player_board_widget = QWidget()
-        player_layout = QVBoxLayout(player_board_widget)
-        player_label = QLabel("Ваше поле")
-        player_label.setAlignment(Qt.AlignCenter)
-        player_layout.addWidget(player_label)
         
-        self.player_grid = QGridLayout()
+        # Создаем сетку для поля игрока
+        player_grid = QGridLayout()
+        player_grid.setSpacing(0)
+        player_grid.setContentsMargins(0, 0, 0, 0)
+        
+        # Создаем сетку для поля компьютера
+        computer_grid = QGridLayout()
+        computer_grid.setSpacing(0)
+        computer_grid.setContentsMargins(0, 0, 0, 0)
+        
+        # Создаем кнопки для поля игрока
         self.player_buttons = []
         for i in range(10):
             row = []
             for j in range(10):
                 button = QPushButton()
-                button.setFixedSize(QSize(40, 40))
+                button.setFixedSize(40, 40)
+                button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        border: 1px solid #cccccc;
+                    }
+                    QPushButton:hover {
+                        background-color: #cccccc;
+                    }
+                """)
                 button.clicked.connect(lambda checked, x=i, y=j: self.on_player_board_click(x, y))
-                self.player_grid.addWidget(button, i, j)
+                player_grid.addWidget(button, i, j)
                 row.append(button)
             self.player_buttons.append(row)
-        player_layout.addLayout(self.player_grid)
-        layout.addWidget(player_board_widget)
-
-        # Create computer's board
-        computer_board_widget = QWidget()
-        computer_layout = QVBoxLayout(computer_board_widget)
-        computer_label = QLabel("Поле противника")
-        computer_label.setAlignment(Qt.AlignCenter)
-        computer_layout.addWidget(computer_label)
         
-        self.computer_grid = QGridLayout()
+        # Создаем кнопки для поля компьютера
         self.computer_buttons = []
         for i in range(10):
             row = []
             for j in range(10):
                 button = QPushButton()
-                button.setFixedSize(QSize(40, 40))
+                button.setFixedSize(40, 40)
+                button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #e0e0e0;
+                        border: 1px solid #cccccc;
+                    }
+                    QPushButton:hover {
+                        background-color: #cccccc;
+                    }
+                """)
                 button.clicked.connect(lambda checked, x=i, y=j: self.on_computer_board_click(x, y))
-                self.computer_grid.addWidget(button, i, j)
+                computer_grid.addWidget(button, i, j)
                 row.append(button)
             self.computer_buttons.append(row)
-        computer_layout.addLayout(self.computer_grid)
-        layout.addWidget(computer_board_widget)
+        
+        # Добавляем сетки в layout
+        layout.addLayout(player_grid)
+        layout.addLayout(computer_grid)
+        
+        # Устанавливаем фоновое изображение
+        self.game_widget.setStyleSheet("""
+            QWidget {
+                background-image: url(../images/game_background.jpg);
+                background-repeat: no-repeat;
+                background-position: center;
+            }
+        """)
+        
+        # Обновляем отображение
+        self.update_board_display()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_R and self.stacked_widget.currentWidget() == self.ship_setup_widget:
@@ -582,4 +608,4 @@ class GameWindow(QMainWindow):
                 "Горизонтально" if self.is_horizontal else "Вертикально"
             )
         else:
-            super().keyPressEvent(event) 
+            super().keyPressEvent(event)

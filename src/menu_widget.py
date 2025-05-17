@@ -10,18 +10,17 @@ class MenuWidget(QWidget):
 
     def init_ui(self):
         # Создаем основной layout
-        layout = QVBoxLayout(self)
+        layout = QVBoxLayout()
         
         # Название игры
         title_label = QLabel("Морской бой")
         title_font = QFont()
-        title_font.setPointSize(48)
+        title_font.setPointSize(24)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignCenter)
-        
-        # Добавляем отступы
-        title_label.setContentsMargins(0, 50, 0, 50)
+        layout.addWidget(title_label)
+        layout.addSpacing(30)
         
         # Кнопки
         buttons_layout = QVBoxLayout()
@@ -32,17 +31,7 @@ class MenuWidget(QWidget):
         start_button = QPushButton("Начать игру")
         start_button.setFixedSize(200, 50)
         start_button.setFont(QFont("Arial", 12))
-        start_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
+        buttons_layout.addWidget(start_button)
         
         # Кнопка "Выход"
         exit_button = QPushButton("Выход")
