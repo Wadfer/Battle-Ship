@@ -4,16 +4,15 @@ import os
 # Добавляем директорию проекта в sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                           QPushButton, QLabel, QGridLayout, 
+                           QStackedWidget, QHBoxLayout, QGroupBox, QRadioButton, QButtonGroup)
+from PyQt5.QtCore import Qt, QTimer, QSize
+from PyQt5.QtGui import QFont, QColor, QPalette, QIcon, QPixmap, QPainter, QBrush, QPen
 
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QGridLayout, QPushButton,
-                             QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QStackedWidget,
-                             QGroupBox, QRadioButton, QButtonGroup)
-from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QColor, QPalette, QIcon, QPixmap, QPainter, QBrush, QPen
 from src.game_logic import GameLogic, CellState, Ship
 from src.menu_widget import MenuWidget
+from src.result_widget import ResultWidget
 import random
 
 class ShipButton(QPushButton):
@@ -58,6 +57,39 @@ class ShipButton(QPushButton):
         self.setEnabled(not placed)  # Блокируем кнопку, если все корабли размещены
         if placed:
             self.setChecked(False)  # Снимаем выделение с заблокированной кнопки
+        self.update()
+
+class ShipButton(QPushButton):
+    def __init__(self, size, parent=None):
+        super().__init__(parent)
+        self.size = size
+        self.setFixedSize(QSize(120, 40))
+        self.setCheckable(True)
+        self.placed = False
+        self.count = 0
+        self.max_count = 0
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        
+        # Рисуем корабль
+        rect = self.rect()
+        rect.adjust(10, 10, -10, -10)  # Добавляем отступы
+        
+        # Рисуем прямоугольник
+        painter.setBrush(QBrush(QColor(135, 206, 235)))  # Светло-голубой цвет
+        painter.setPen(QPen(Qt.black, 2))
+        painter.drawRect(rect)
+        
+        # Рисуем количество кораблей
+        font = painter.font()
+        font.setPointSize(10)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignCenter, f"{self.count}/{self.max_count}")
+
+    def setPlaced(self, placed):
+        self.placed = placed
         self.update()
 
 class GameWindow(QMainWindow):
@@ -404,7 +436,7 @@ class GameWindow(QMainWindow):
 
         if self.game_logic.check_game_over():
             winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-            QMessageBox.information(self, "Игра окончена", f"{winner} победили!")
+            self.show_result(winner)
 
     def on_computer_board_click(self, x: int, y: int):
         if self.game_logic.current_turn == "player" and not self.game_logic.game_over:
@@ -420,21 +452,16 @@ class GameWindow(QMainWindow):
                     ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.computer_board, x, y)
                     for sx, sy in ship_coords:
                         self.game_logic.mark_surrounding_cells(self.game_logic.computer_board, sx, sy)
-            
-            self.update_board_display()
-            
-            if ship_sunk:
-                self.game_logic.mark_surrounding_cells(self.game_logic.computer_board, x, y)
-                self.update_board_display()
-            elif hit:
+                # После попадания (будь то уничтоженный или подбитый корабль) продолжаем ход
                 self.update_board_display()
             else:
+                # При промахе передаем ход компьютеру
                 self.game_logic.switch_turn()
                 self.computer_turn()
 
         if self.game_logic.check_game_over():
             winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-            QMessageBox.information(self, "Игра окончена", f"{winner} победили!")
+            self.show_result(winner)
 
     def computer_turn(self):
         def make_computer_shot():
@@ -464,37 +491,44 @@ class GameWindow(QMainWindow):
             # Выбираем клетку
             x, y = random.choice(available_cells)
             
-            hit, ship_sunk = self.game_logic.make_shot(self.game_logic.player_board, x, y)
-            
-            if hit:
-                # Mark surrounding cells if ship is sunk
-                if ship_sunk:
-                    ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.player_board, x, y)
-                    for sx, sy in ship_coords:
-                        self.game_logic.mark_surrounding_cells(self.game_logic.player_board, sx, sy)
-
-                    # После уничтожения корабля передаем ход игроку
-                    self.game_logic.switch_turn()
-                else:
-                    # Если попал, продолжаем ход
+            # Создаем функцию для выполнения выстрела
+            def execute_shot():
+                hit, ship_sunk = self.game_logic.make_shot(self.game_logic.player_board, x, y)
+                
+                if hit:
+                    # Mark surrounding cells if ship is sunk
+                    if ship_sunk:
+                        ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.player_board, x, y)
+                        for sx, sy in ship_coords:
+                            self.game_logic.mark_surrounding_cells(self.game_logic.player_board, sx, sy)
+                    # После попадания (будь то уничтоженный или подбитый корабль) продолжаем ход
                     QTimer.singleShot(500, make_computer_shot)
-            else:
-                # При промахе передаем ход игроку
-                self.game_logic.switch_turn()
-            
-            self.update_board_display()
-            
-            # Проверяем конец игры сразу после хода
+                else:
+                    # При промахе передаем ход игроку
+                    self.game_logic.switch_turn()
+                
+                self.update_board_display()
+                
+                # Проверяем конец игры сразу после хода
             if self.game_logic.check_game_over():
                 winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-                QMessageBox.information(self, "Игра окончена", f"{winner} победили!")
+                self.show_result(winner)
+            
+            # Добавляем задержку перед выстрелом
+            QTimer.singleShot(500, execute_shot)
 
-        # Добавляем задержку перед первым выстрелом
-        QTimer.singleShot(500, make_computer_shot)
+        # Вызываем сразу без задержки
+        make_computer_shot()
 
     def show_ship_setup(self):
         self.stacked_widget.setCurrentWidget(self.ship_setup_widget)
         self.setup_computer_ships()  # Размещаем корабли компьютера
+
+    def show_result(self, winner):
+        """Показывает экран с результатом игры"""
+        result_widget = ResultWidget(winner, self)
+        self.stacked_widget.addWidget(result_widget)
+        self.stacked_widget.setCurrentWidget(result_widget)
 
     def init_game_ui(self):
         layout = QHBoxLayout(self.game_widget)

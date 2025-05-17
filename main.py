@@ -7,3 +7,4 @@ if __name__ == '__main__':
     window = GameWindow()
     window.show()
     sys.exit(app.exec_())
+    
