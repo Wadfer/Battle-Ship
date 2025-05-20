@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
+from src.utils import get_image_path
 
 class ResultWidget(QWidget):
     def __init__(self, winner, parent=None):
@@ -45,26 +46,26 @@ class ResultWidget(QWidget):
         layout.addLayout(buttons_layout)
         
         self.setLayout(layout)
-        self.setStyleSheet("""
-            QWidget {
-                background-image: url(../images/result_background.jpg);
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-image: url({get_image_path('result_background.jpg')});
                 background-repeat: no-repeat;
                 background-position: center;
-            }
-            QLabel {
+            }}
+            QLabel {{
                 color: black;
-            }
-            QPushButton {
+            }}
+            QPushButton {{
                 background-color: #4CAF50;
                 color: white;
                 border: none;
                 padding: 10px 20px;
                 border-radius: 5px;
                 min-width: 120px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #45a049;
-            }
+            }}
         """)
 
     def back_clicked(self):

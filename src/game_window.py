@@ -13,6 +13,7 @@ from PyQt5.QtGui import QFont, QColor, QPalette, QIcon, QPixmap, QPainter, QBrus
 from src.game_logic import GameLogic, CellState, Ship
 from src.menu_widget import MenuWidget
 from src.result_widget import ResultWidget
+from src.utils import get_image_path
 import random
 
 class ShipButton(QPushButton):
@@ -524,9 +525,59 @@ class GameWindow(QMainWindow):
         self.stacked_widget.setCurrentWidget(self.ship_setup_widget)
         self.setup_computer_ships()  # Размещаем корабли компьютера
 
+    def get_image_path(self, image_name: str) -> str:
+        return get_image_path(image_name)
+
     def show_result(self, winner):
         """Показывает экран с результатом игры"""
         result_widget = ResultWidget(winner, self)
+        
+        # Устанавливаем фоновое изображение в зависимости от результата
+        if winner == "Вы":
+            result_widget.setStyleSheet(f"""
+                QWidget {{
+                    background-image: url({self.get_image_path('win_result_background.jpg')});
+                    background-repeat: no-repeat;
+                    background-position: center;
+                }}
+                QLabel {{
+                    color: black;
+                }}
+                QPushButton {{
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    min-width: 120px;
+                }}
+                QPushButton:hover {{
+                    background-color: #45a049;
+                }}
+            """)
+        else:
+            result_widget.setStyleSheet(f"""
+                QWidget {{
+                    background-image: url({self.get_image_path('loss_result_background.jpg')});
+                    background-repeat: no-repeat;
+                    background-position: center;
+                }}
+                QLabel {{
+                    color: black;
+                }}
+                QPushButton {{
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    min-width: 120px;
+                }}
+                QPushButton:hover {{
+                    background-color: #45a049;
+                }}
+            """)
+        
         self.stacked_widget.addWidget(result_widget)
         self.stacked_widget.setCurrentWidget(result_widget)
 
@@ -590,12 +641,12 @@ class GameWindow(QMainWindow):
         layout.addLayout(computer_grid)
         
         # Устанавливаем фоновое изображение
-        self.game_widget.setStyleSheet("""
-            QWidget {
-                background-image: url(../images/game_background.jpg);
+        self.game_widget.setStyleSheet(f"""
+            QWidget {{
+                background-image: url({get_image_path('game_background.jpg')});
                 background-repeat: no-repeat;
                 background-position: center;
-            }
+            }}
         """)
         
         # Обновляем отображение

@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
                              QSizePolicy)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
+from pathlib import Path
+from src.utils import get_image_path
 
 class MenuWidget(QWidget):
     def __init__(self, parent=None):
