@@ -1,16 +1,43 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont
-from src.utils import get_image_path
+from PyQt5.QtGui import QFont, QPalette, QPixmap
+from src.utils import get_image_path, load_image_from_resource
 
 class ResultWidget(QWidget):
-    def __init__(self, winner, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.init_ui(winner)
+        self.init_ui()
 
-    def init_ui(self, winner):
+    def init_ui(self):
         layout = QVBoxLayout()
         
+        # Заголовок результата
+        self.result_label = QLabel()
+        self.result_label.setFont(QFont("Arial", 24, QFont.Bold))
+        self.result_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.result_label)
+        layout.addSpacing(30)
+        
+        # Кнопки
+        buttons_layout = QHBoxLayout()
+        
+        # Кнопка "Начать заново"
+        restart_button = QPushButton("Начать заново")
+        restart_button.setFont(QFont("Arial", 16))
+        restart_button.clicked.connect(self.parent().show_ship_setup)
+        buttons_layout.addWidget(restart_button)
+
+        # Кнопка "В главное меню"
+        menu_button = QPushButton("В главное меню")
+        menu_button.setFont(QFont("Arial", 16))
+        menu_button.clicked.connect(self.parent().show_menu)
+        buttons_layout.addWidget(menu_button)
+
+        layout.addLayout(buttons_layout)
+        layout.addSpacing(20)
+        
+        self.setLayout(layout)
+
         # Заголовок игры
         title_label = QLabel("Морской бой")
         title_font = QFont()
@@ -19,54 +46,27 @@ class ResultWidget(QWidget):
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
-        layout.addSpacing(30)
         
-        # Результат игры
-        result_label = QLabel(f"{winner} победил!")
-        result_font = QFont()
-        result_font.setPointSize(18)
-        result_label.setFont(result_font)
-        result_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(result_label)
-        layout.addSpacing(20)
-        
-        # Кнопки
-        buttons_layout = QHBoxLayout()
-        
-        # Кнопка "Назад"
-        back_button = QPushButton("Назад")
-        back_button.clicked.connect(self.back_clicked)
-        buttons_layout.addWidget(back_button)
-        
-        # Кнопка "Новая игра"
-        new_game_button = QPushButton("Новая игра")
-        new_game_button.clicked.connect(self.new_game_clicked)
-        buttons_layout.addWidget(new_game_button)
-        
-        layout.addLayout(buttons_layout)
-        
-        self.setLayout(layout)
-        self.setStyleSheet(f"""
-            QWidget {{
-                background-image: url({get_image_path('result_background.jpg')});
-                background-repeat: no-repeat;
-                background-position: center;
-            }}
-            QLabel {{
-                color: black;
-            }}
-            QPushButton {{
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                min-width: 120px;
-            }}
-            QPushButton:hover {{
-                background-color: #45a049;
-            }}
-        """)
+        # Загружаем фон из ресурсов
+        pixmap = load_image_from_resource(':/images/result_background.jpg')
+        if not pixmap.isNull():
+            self.setStyleSheet("""
+                QWidget { 
+                    background-color: transparent;
+                }
+                QLabel { color: black }
+                QPushButton { 
+                    background-color: #4CAF50
+                    color: white
+                    border: none
+                    padding: 10px 20px
+                    border-radius: 5px
+                    min-width: 120px
+                }
+                QPushButton:hover { background-color: #45a049 }
+            """)
+            self.setPalette(global_palette)
+            self.setAutoFillBackground(True)
 
     def back_clicked(self):
         self.parent().show_menu()

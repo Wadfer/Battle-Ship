@@ -4,16 +4,16 @@ import os
 # Добавляем директорию проекта в sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                           QPushButton, QLabel, QGridLayout, 
-                           QStackedWidget, QHBoxLayout, QGroupBox, QRadioButton, QButtonGroup)
-from PyQt5.QtCore import Qt, QTimer, QSize
-from PyQt5.QtGui import QFont, QColor, QPalette, QIcon, QPixmap, QPainter, QBrush, QPen
-
-from src.game_logic import GameLogic, CellState, Ship
-from src.menu_widget import MenuWidget
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+                             QLabel, QPushButton, QStackedWidget, QGroupBox)
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPalette, QPixmap
+from src.utils import get_image_path, load_image_from_resource
+from src.ship_setup_widget import ShipSetupWidget
+from src.game_widget import GameWidget
 from src.result_widget import ResultWidget
-from src.utils import get_image_path
+from src.menu_widget import MenuWidget
+from src.game_logic import CellState, GameLogic
 import random
 
 class ShipButton(QPushButton):
@@ -110,26 +110,31 @@ class GameWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
 
         # Create stacked widget for different screens
-        self.stacked_widget = QStackedWidget()
-        main_layout.addWidget(self.stacked_widget)
-
-        # Create menu screen
         self.menu_widget = MenuWidget()
-        self.menu_widget.set_button_actions(self.show_ship_setup, self.close)
+        self.ship_setup_widget = ShipSetupWidget()
+        self.game_widget = GameWidget()
+        self.result_widget = ResultWidget()
+
+        # Создаем стек виджетов
+        self.stacked_widget = QStackedWidget()
         self.stacked_widget.addWidget(self.menu_widget)
-
-        # Create ship setup screen
-        self.ship_setup_widget = QWidget()
-        self.init_ship_setup_ui()
         self.stacked_widget.addWidget(self.ship_setup_widget)
-
-        # Create game screen
-        self.game_widget = QWidget()
-        self.init_game_ui()
         self.stacked_widget.addWidget(self.game_widget)
+        self.stacked_widget.addWidget(self.result_widget)
 
-        # Start with menu screen
-        self.stacked_widget.setCurrentWidget(self.menu_widget)
+        # Подключаем сигналы меню
+        self.menu_widget.start_game.connect(self.show_ship_setup)
+        self.menu_widget.exit_game.connect(self.close)
+
+        # Устанавливаем стек виджетов как центральный виджет
+        self.setCentralWidget(self.stacked_widget)
+
+        # Устанавливаем размер окна
+        self.resize(800, 600)
+        self.setWindowTitle("Морской бой")
+
+        # Инициализируем меню
+        self.show_menu()
 
     def init_ship_setup_ui(self):
         layout = QHBoxLayout(self.ship_setup_widget)
@@ -511,9 +516,9 @@ class GameWindow(QMainWindow):
                 self.update_board_display()
                 
                 # Проверяем конец игры сразу после хода
-            if self.game_logic.check_game_over():
-                winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-                self.show_result(winner)
+                if self.game_logic.check_game_over():
+                    winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
+                    self.show_result(winner)
             
             # Добавляем задержку перед выстрелом
             QTimer.singleShot(500, execute_shot)
@@ -521,71 +526,34 @@ class GameWindow(QMainWindow):
         # Вызываем сразу без задержки
         make_computer_shot()
 
-    def show_ship_setup(self):
-        self.stacked_widget.setCurrentWidget(self.ship_setup_widget)
-        self.setup_computer_ships()  # Размещаем корабли компьютера
-
-    def get_image_path(self, image_name: str) -> str:
-        return get_image_path(image_name)
-
     def show_result(self, winner):
         """Показывает экран с результатом игры"""
-        result_widget = ResultWidget(winner, self)
-        
-        # Устанавливаем фоновое изображение в зависимости от результата
-        if winner == "Вы":
-            result_widget.setStyleSheet(f"""
-                QWidget {{
-                    background-image: url({self.get_image_path('win_result_background.jpg')});
-                    background-repeat: no-repeat;
-                    background-position: center;
-                }}
-                QLabel {{
-                    color: black;
-                }}
-                QPushButton {{
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    min-width: 120px;
-                }}
-                QPushButton:hover {{
-                    background-color: #45a049;
-                }}
-            """)
-        else:
-            result_widget.setStyleSheet(f"""
-                QWidget {{
-                    background-image: url({self.get_image_path('loss_result_background.jpg')});
-                    background-repeat: no-repeat;
-                    background-position: center;
-                }}
-                QLabel {{
-                    color: black;
-                }}
-                QPushButton {{
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    min-width: 120px;
-                }}
-                QPushButton:hover {{
-                    background-color: #45a049;
-                }}
-            """)
-        
+        result_widget = ResultWidget(self)
+        result_widget.set_winner(winner)
+        style = f"""
+            QWidget {{ background-image: url("{get_image_path('win_result_background.jpg')}") }}
+            QLabel {{ color: black }}
+            QPushButton {{ 
+                background-color: #4CAF50
+                color: white
+                border: none
+                padding: 10px 20px
+                border-radius: 5px
+                min-width: 120px
+            }}
+            QPushButton:hover {{ background-color: #45a049 }}
+        """
+        result_widget.setStyleSheet(style)
         self.stacked_widget.addWidget(result_widget)
         self.stacked_widget.setCurrentWidget(result_widget)
 
-    def init_game_ui(self):
-        layout = QHBoxLayout(self.game_widget)
+    def show_ship_setup(self):
+        """Переходит к экрану настройки кораблей"""
+        self.stacked_widget.setCurrentWidget(self.ship_setup_widget)
+        self.setup_computer_ships()  # Размещаем корабли компьютера
         
-        # Создаем сетку для поля игрока
-        player_grid = QGridLayout()
+        # Добавляем задержку перед выстрелом
+        QTimer.singleShot(500, execute_shot)
         player_grid.setSpacing(0)
         player_grid.setContentsMargins(0, 0, 0, 0)
         
@@ -641,13 +609,17 @@ class GameWindow(QMainWindow):
         layout.addLayout(computer_grid)
         
         # Устанавливаем фоновое изображение
-        self.game_widget.setStyleSheet(f"""
-            QWidget {{
-                background-image: url({get_image_path('game_background.jpg')});
-                background-repeat: no-repeat;
-                background-position: center;
-            }}
-        """)
+        # Загружаем фон из ресурсов
+        pixmap = load_image_from_resource(':/images/game_background.jpg')
+        if not pixmap.isNull():
+            self.game_widget.setStyleSheet("""
+                QWidget { 
+                    background-color: transparent;
+                }
+            """)
+            # Устанавливаем фон через палитру
+            self.game_widget.setPalette(global_palette)
+            self.game_widget.setAutoFillBackground(True)
         
         # Обновляем отображение
         self.update_board_display()
