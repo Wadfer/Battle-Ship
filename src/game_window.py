@@ -4,194 +4,70 @@ import os
 # Добавляем директорию проекта в sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-                             QLabel, QPushButton, QStackedWidget, QGroupBox)
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QGridLayout, QGroupBox)
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QPalette, QPixmap
-from src.utils import get_image_path, load_image_from_resource
-from src.ship_setup_widget import ShipSetupWidget
-from src.game_widget import GameWidget
-from src.result_widget import ResultWidget
-from src.menu_widget import MenuWidget
-from src.game_logic import CellState, GameLogic
+from PyQt5.QtGui import QPalette, QPixmap, QFont
+from src.menu_widget_new import MenuWidget
+from src.ship_placement_widget import ShipPlacementWidget
+from src.game_logic import CellState, GameLogic, Ship
 import random
 
-class ShipButton(QPushButton):
-    def __init__(self, size, parent=None):
-        super().__init__(parent)
-        self.size = size
-        self.setFixedSize(QSize(120, 40))
-        self.setCheckable(True)
-        self.placed = False
-        self.count = 0
-        self.max_count = 0
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Рисуем корабль
-        cell_size = 20
-        start_x = 10
-        y = 10
-
-        # Устанавливаем цвет в зависимости от состояния
-        if self.placed:
-            painter.setBrush(QBrush(QColor("#e0e0e0")))  # Светло-серый для размещенных
-        else:
-            painter.setBrush(QBrush(QColor("#808080")))  # Серый для неразмещенных
-
-        painter.setPen(QPen(Qt.black, 1))
-        
-        # Рисуем корабль горизонтально
-        for i in range(self.size):
-            painter.drawRect(start_x + i * cell_size, y, cell_size - 2, cell_size - 2)
-
-        # Рисуем счетчик
-        painter.setPen(QPen(Qt.black))
-        painter.drawText(start_x + self.size * cell_size + 5, y + 15, 
-                        f"{self.count}/{self.max_count}")
-
-    def setPlaced(self, placed):
-        self.placed = placed
-        self.setEnabled(not placed)  # Блокируем кнопку, если все корабли размещены
-        if placed:
-            self.setChecked(False)  # Снимаем выделение с заблокированной кнопки
-        self.update()
-
-class ShipButton(QPushButton):
-    def __init__(self, size, parent=None):
-        super().__init__(parent)
-        self.size = size
-        self.setFixedSize(QSize(120, 40))
-        self.setCheckable(True)
-        self.placed = False
-        self.count = 0
-        self.max_count = 0
-
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        
-        # Рисуем корабль
-        rect = self.rect()
-        rect.adjust(10, 10, -10, -10)  # Добавляем отступы
-        
-        # Рисуем прямоугольник
-        painter.setBrush(QBrush(QColor(135, 206, 235)))  # Светло-голубой цвет
-        painter.setPen(QPen(Qt.black, 2))
-        painter.drawRect(rect)
-        
-        # Рисуем количество кораблей
-        font = painter.font()
-        font.setPointSize(10)
-        painter.setFont(font)
-        painter.drawText(rect, Qt.AlignCenter, f"{self.count}/{self.max_count}")
-
-    def setPlaced(self, placed):
-        self.placed = placed
-        self.update()
 
 class GameWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.game_logic = GameLogic()
         self.init_ui()
-        self.selected_ship_size = 4  # По умолчанию выбран самый большой корабль
+        self.current_widget = None
 
     def init_ui(self):
-        self.setWindowTitle('Морской бой')
-        self.setMinimumSize(1000, 600)
-
-        # Create central widget and main layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-
-        # Create stacked widget for different screens
+        self.setWindowTitle("Морской бой")
+        self.setGeometry(100, 100, 1000, 600)
+        self.setFixedSize(1000, 600)
+        
+        # Создаем главное меню
         self.menu_widget = MenuWidget()
-        self.ship_setup_widget = ShipSetupWidget()
-        self.game_widget = GameWidget()
-        self.result_widget = ResultWidget()
-
-        # Создаем стек виджетов
-        self.stacked_widget = QStackedWidget()
-        self.stacked_widget.addWidget(self.menu_widget)
-        self.stacked_widget.addWidget(self.ship_setup_widget)
-        self.stacked_widget.addWidget(self.game_widget)
-        self.stacked_widget.addWidget(self.result_widget)
-
-        # Подключаем сигналы меню
-        self.menu_widget.start_game.connect(self.show_ship_setup)
+        self.setCentralWidget(self.menu_widget)
+        
+        # Подключаем сигналы
+        self.menu_widget.start_game.connect(self.show_ship_placement)
         self.menu_widget.exit_game.connect(self.close)
 
-        # Устанавливаем стек виджетов как центральный виджет
-        self.setCentralWidget(self.stacked_widget)
 
-        # Устанавливаем размер окна
-        self.resize(800, 600)
-        self.setWindowTitle("Морской бой")
 
-        # Инициализируем меню
-        self.show_menu()
-
-    def init_ship_setup_ui(self):
-        layout = QHBoxLayout(self.ship_setup_widget)
-
-        # Left side - Game board
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-
-        # Ship info label
-        self.ship_info_label = QLabel()
-        self.ship_info_label.setAlignment(Qt.AlignCenter)
-        left_layout.addWidget(self.ship_info_label)
-
-        # Orientation info label
-        self.orientation_label = QLabel("Нажмите 'R' для поворота корабля")
-        self.orientation_label.setAlignment(Qt.AlignCenter)
-        left_layout.addWidget(self.orientation_label)
-
-        # Game board
-        board_widget = QWidget()
-        board_layout = QVBoxLayout(board_widget)
-        board_label = QLabel("Ваше поле")
-        board_label.setAlignment(Qt.AlignCenter)
-        board_layout.addWidget(board_label)
+    def show_ship_placement(self):
+        """Показывает экран расстановки кораблей"""
+        if self.current_widget:
+            self.current_widget.hide()
         
-        self.setup_grid = QGridLayout()
-        self.setup_buttons = []
-        for i in range(10):
-            row = []
-            for j in range(10):
-                button = QPushButton()
-                button.setFixedSize(QSize(40, 40))
-                button.clicked.connect(lambda checked, x=i, y=j: self.on_setup_board_click(x, y))
-                self.setup_grid.addWidget(button, i, j)
-                row.append(button)
-            self.setup_buttons.append(row)
-        board_layout.addLayout(self.setup_grid)
-        left_layout.addWidget(board_widget)
+        self.ship_placement_widget = ShipPlacementWidget()
+        self.ship_placement_widget.start_game.connect(self.start_game)
+        self.setCentralWidget(self.ship_placement_widget)
+        self.current_widget = self.ship_placement_widget
 
-        # Кнопка "Назад"
-        back_button = QPushButton("Назад")
-        back_button.setFixedSize(100, 30)
-        back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #f44336;
+    def start_game(self):
+        """Начинает новую игру"""
+        print("Начинаем новую игру")
+        if self.current_widget:
+            self.current_widget.hide()
+        
+        # Здесь будет создание игрового поля
+        self.game_widget = QLabel("Игровое поле")
+        self.game_widget.setStyleSheet("""
+            QLabel {
+                border: 2px solid white;
+                background-color: #00008B;
                 color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #da190b;
+                font-size: 24px;
             }
         """)
-        back_button.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.menu_widget))
-        left_layout.addWidget(back_button, alignment=Qt.AlignBottom)
-        
-        layout.addWidget(left_widget)
+        self.game_widget.setFixedSize(1000, 600)
+        self.setCentralWidget(self.game_widget)
+        self.current_widget = self.game_widget    # Размещаем корабли игрока
+        self.setup_player_ships()  # Размещаем корабли компьютера
+        self.setup_computer_ships()  # Размещаем корабли компьютера
+        self.game_logic.start_game()  # Начинаем игру
+        self.menu_widget.show_game()  # Показываем игровое поле в меню
 
         # Right side - Control panel
         right_widget = QWidget()
@@ -258,108 +134,6 @@ class GameWindow(QMainWindow):
             button.count = placed_ships.get(size, 0)
             button.setPlaced(button.count == button.max_count)
 
-        # Если текущий выбранный корабль заблокирован, выбираем первый доступный
-        if self.ship_buttons[self.selected_ship_size].placed:
-            for size, button in self.ship_buttons.items():
-                if not button.placed:
-                    self.select_ship(size)
-                    break
-
-    def select_ship(self, size: int):
-        if not self.ship_buttons[size].placed:  # Проверяем, не заблокирован ли корабль
-            self.selected_ship_size = size
-            for s, button in self.ship_buttons.items():
-                button.setChecked(s == size and not button.placed)
-
-    def randomize_ships(self):
-        # Clear current board
-        self.clear_board()
-        
-        # Place ships randomly
-        ships = self.ships.copy()
-        random.shuffle(ships)
-        
-        for ship_size in ships:
-            ship = Ship(ship_size)
-            while True:
-                x = random.randint(0, 9)
-                y = random.randint(0, 9)
-                is_horizontal = random.choice([True, False])
-                if self.game_logic.place_ship(self.game_logic.player_board, ship, (x, y), is_horizontal):
-                    self.game_logic.player_ships.append(ship)
-                    break
-        
-        self.current_ship_index = len(self.ships)
-        self.update_setup_board_display()
-        self.update_ship_info()
-        self.update_ship_counts()  # Обновляем счетчики кораблей
-
-    def clear_board(self):
-        # Clear the board
-        self.game_logic.player_board = [[CellState.EMPTY for _ in range(10)] for _ in range(10)]
-        self.game_logic.player_ships = []
-        self.current_ship_index = 0
-        self.update_setup_board_display()
-        self.update_ship_info()
-        self.update_ship_counts()  # Обновляем счетчики кораблей
-        self.done_button.setEnabled(False)
-
-    def set_orientation(self, horizontal: bool):
-        self.is_horizontal = horizontal
-        self.orientation_label.setText(
-            "Горизонтально" if self.is_horizontal else "Вертикально"
-        )
-
-    def update_ship_info(self):
-        if self.current_ship_index < len(self.ships):
-            remaining_ships = self.ships[self.current_ship_index:]
-            ship_counts = {}
-            for size in remaining_ships:
-                ship_counts[size] = ship_counts.get(size, 0) + 1
-            
-            info_text = "Осталось разместить:\n"
-            for size, count in sorted(ship_counts.items(), reverse=True):
-                info_text += f"Корабль {size}x1: {count} шт.\n"
-            self.ship_info_label.setText(info_text)
-        else:
-            self.ship_info_label.setText("Все корабли размещены!")
-            self.done_button.setEnabled(True)
-
-    def update_setup_board_display(self):
-        for i in range(10):
-            for j in range(10):
-                state = self.game_logic.player_board[i][j]
-                if state == CellState.EMPTY:
-                    self.setup_buttons[i][j].setStyleSheet("background-color: white;")
-                elif state == CellState.SHIP:
-                    self.setup_buttons[i][j].setStyleSheet("background-color: gray;")
-
-    def show_invalid_placement(self, x: int, y: int):
-        self.setup_buttons[x][y].setStyleSheet("background-color: #ffcccc;")
-        QTimer.singleShot(500, lambda: self.update_setup_board_display())
-
-    def on_setup_board_click(self, x: int, y: int):
-        if self.current_ship_index >= len(self.ships):
-            return
-
-        ship = Ship(self.selected_ship_size)
-        if self.game_logic.place_ship(self.game_logic.player_board, ship, (x, y), self.is_horizontal):
-            self.game_logic.player_ships.append(ship)
-            self.current_ship_index += 1
-            self.update_setup_board_display()
-            self.update_ship_info()
-            self.update_ship_counts()  # Обновляем счетчики кораблей
-        else:
-            self.show_invalid_placement(x, y)
-
-    def on_setup_done_clicked(self):
-        if self.current_ship_index == len(self.ships):
-            self.stacked_widget.setCurrentWidget(self.game_widget)
-        else:
-            self.ship_info_label.setText("Разместите все корабли перед началом игры!")
-            self.ship_info_label.setStyleSheet("color: red;")
-            QTimer.singleShot(2000, lambda: self.update_ship_info())
-
     def setup_computer_ships(self):
         # Создаем список кораблей
         ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
@@ -388,6 +162,35 @@ class GameWindow(QMainWindow):
             if not placed:
                 return False
 
+    def setup_player_ships(self):
+        """Автоматически размещает корабли игрока"""
+        # Создаем список кораблей
+        ships = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1]
+        
+        # Сначала очищаем доску и список кораблей
+        self.game_logic.player_board = [[CellState.EMPTY for _ in range(10)] for _ in range(10)]
+        self.game_logic.player_ships = []
+        
+        # Размещаем корабли
+        for ship_size in ships:
+            ship = Ship(ship_size)
+            placed = False
+            attempts = 0
+            max_attempts = 100  # Максимальное количество попыток размещения
+            
+            while not placed and attempts < max_attempts:
+                x = random.randint(0, 9)
+                y = random.randint(0, 9)
+                is_horizontal = random.choice([True, False])
+                
+                if self.game_logic.place_ship(self.game_logic.player_board, ship, (x, y), is_horizontal):
+                    self.game_logic.player_ships.append(ship)
+                    placed = True
+                attempts += 1
+            
+            if not placed:
+                return False
+
     def update_board_display(self):
         # Update player's board
         for i in range(10):
@@ -404,231 +207,53 @@ class GameWindow(QMainWindow):
     def update_button(self, button: QPushButton, state: CellState, is_computer_board: bool = False):
         if state == CellState.EMPTY:
             button.setStyleSheet("background-color: white;")
-            button.setEnabled(True)  # Клетка доступна для выстрела
+            button.setEnabled(True)  
         elif state == CellState.SHIP:
             if is_computer_board:
-                button.setStyleSheet("background-color: white;")  # Скрываем корабли компьютера
+                button.setStyleSheet("background-color: white;")  
             else:
-                button.setStyleSheet("background-color: gray;")  # Корабли игрока видны
-            button.setEnabled(True)  # Клетка доступна для выстрела
-        elif state == CellState.HIT:
-            button.setStyleSheet("background-color: red;")
-            button.setEnabled(False)  # Клетка уже использована
-        elif state == CellState.MISS:
-            button.setStyleSheet("background-color: blue;")
-            button.setEnabled(False)  # Клетка уже использована
+                button.setStyleSheet("background-color: gray;")  
 
-    def on_player_board_click(self, x: int, y: int):
-        if self.game_logic.current_turn == "player" and not self.game_logic.game_over:
-            hit, ship_sunk = self.game_logic.make_shot(self.game_logic.computer_board, x, y)
-            
-            if hit:
-                # Mark surrounding cells if ship is sunk
-                if ship_sunk:
-                    ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.computer_board, x, y)
-                    for sx, sy in ship_coords:
-                        self.game_logic.mark_surrounding_cells(self.game_logic.computer_board, sx, sy)
-            
-            self.update_board_display()
-            
+    def make_computer_shot(self):
+        """Выбирает случайную клетку для выстрела компьютера"""
+        # Получаем список доступных клеток для выстрела
+        available_cells = []
+        for x in range(10):
+            for y in range(10):
+                if self.game_logic.player_board[x][y] in [CellState.EMPTY, CellState.SHIP]:
+                    available_cells.append((x, y))
+        
+        if not available_cells:
+            return  
+        
+        # Выбираем клетку
+        x, y = random.choice(available_cells)
+        self.execute_shot(x, y)
+
+    def execute_shot(self, x: int, y: int):
+        """Выполняет выстрел по указанной клетке"""
+        hit, ship_sunk = self.game_logic.make_shot(self.game_logic.player_board, x, y)
+        
+        if hit:
+            # Mark surrounding cells if ship is sunk
             if ship_sunk:
-                self.game_logic.mark_surrounding_cells(self.game_logic.computer_board, x, y)
-                self.update_board_display()
-            elif hit:
-                self.update_board_display()
-            else:
-                self.game_logic.switch_turn()
-                self.computer_turn()
-
-        if self.game_logic.check_game_over():
-            winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-            self.show_result(winner)
-
-    def on_computer_board_click(self, x: int, y: int):
-        if self.game_logic.current_turn == "player" and not self.game_logic.game_over:
-            # Проверяем, не была ли клетка уже использована
-            if self.game_logic.computer_board[x][y] in [CellState.HIT, CellState.MISS]:
-                return  # Клетка уже использована
-
-            hit, ship_sunk = self.game_logic.make_shot(self.game_logic.computer_board, x, y)
-            
-            if hit:
-                # Mark surrounding cells if ship is sunk
-                if ship_sunk:
-                    ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.computer_board, x, y)
-                    for sx, sy in ship_coords:
-                        self.game_logic.mark_surrounding_cells(self.game_logic.computer_board, sx, sy)
-                # После попадания (будь то уничтоженный или подбитый корабль) продолжаем ход
-                self.update_board_display()
-            else:
-                # При промахе передаем ход компьютеру
-                self.game_logic.switch_turn()
-                self.computer_turn()
-
-        if self.game_logic.check_game_over():
-            winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-            self.show_result(winner)
-
-    def computer_turn(self):
-        def make_computer_shot():
-            # Ищем доступную клетку
-            available_cells = []
-            # Сначала ищем клетки вокруг попаданий
-            for x in range(10):
-                for y in range(10):
-                    if self.game_logic.player_board[x][y] == CellState.HIT:
-                        # Проверяем соседние клетки
-                        for dx, dy in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-                            nx, ny = x + dx, y + dy
-                            if 0 <= nx < 10 and 0 <= ny < 10:
-                                if self.game_logic.player_board[nx][ny] in [CellState.EMPTY, CellState.SHIP]:
-                                    available_cells.append((nx, ny))
-            
-            # Если не нашли клеток вокруг попаданий, ищем случайные клетки
-            if not available_cells:
-                for x in range(10):
-                    for y in range(10):
-                        if self.game_logic.player_board[x][y] in [CellState.EMPTY, CellState.SHIP]:
-                            available_cells.append((x, y))
-            
-            if not available_cells:
-                return  # Нет доступных клеток
-                
-            # Выбираем клетку
-            x, y = random.choice(available_cells)
-            
-            # Создаем функцию для выполнения выстрела
-            def execute_shot():
-                hit, ship_sunk = self.game_logic.make_shot(self.game_logic.player_board, x, y)
-                
-                if hit:
-                    # Mark surrounding cells if ship is sunk
-                    if ship_sunk:
-                        ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.player_board, x, y)
-                        for sx, sy in ship_coords:
-                            self.game_logic.mark_surrounding_cells(self.game_logic.player_board, sx, sy)
-                    # После попадания (будь то уничтоженный или подбитый корабль) продолжаем ход
-                    QTimer.singleShot(500, make_computer_shot)
-                else:
-                    # При промахе передаем ход игроку
-                    self.game_logic.switch_turn()
-                
-                self.update_board_display()
-                
-                # Проверяем конец игры сразу после хода
-                if self.game_logic.check_game_over():
-                    winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
-                    self.show_result(winner)
-            
-            # Добавляем задержку перед выстрелом
-            QTimer.singleShot(500, execute_shot)
-
-        # Вызываем сразу без задержки
-        make_computer_shot()
-
-    def show_result(self, winner):
-        """Показывает экран с результатом игры"""
-        result_widget = ResultWidget(self)
-        result_widget.set_winner(winner)
-        style = f"""
-            QWidget {{ background-image: url("{get_image_path('win_result_background.jpg')}") }}
-            QLabel {{ color: black }}
-            QPushButton {{ 
-                background-color: #4CAF50
-                color: white
-                border: none
-                padding: 10px 20px
-                border-radius: 5px
-                min-width: 120px
-            }}
-            QPushButton:hover {{ background-color: #45a049 }}
-        """
-        result_widget.setStyleSheet(style)
-        self.stacked_widget.addWidget(result_widget)
-        self.stacked_widget.setCurrentWidget(result_widget)
-
-    def show_ship_setup(self):
-        """Переходит к экрану настройки кораблей"""
-        self.stacked_widget.setCurrentWidget(self.ship_setup_widget)
-        self.setup_computer_ships()  # Размещаем корабли компьютера
+                ship_coords = self.game_logic.get_ship_coordinates(self.game_logic.player_board, x, y)
+                for sx, sy in ship_coords:
+                    self.game_logic.mark_surrounding_cells(self.game_logic.player_board, sx, sy)
+            # После попадания (будь то уничтоженный или подбитый корабль) продолжаем ход
+            QTimer.singleShot(500, self.make_computer_shot)
+        else:
+            # При промахе передаем ход игроку
+            self.game_logic.switch_turn()
         
-        # Добавляем задержку перед выстрелом
-        QTimer.singleShot(500, execute_shot)
-        player_grid.setSpacing(0)
-        player_grid.setContentsMargins(0, 0, 0, 0)
-        
-        # Создаем сетку для поля компьютера
-        computer_grid = QGridLayout()
-        computer_grid.setSpacing(0)
-        computer_grid.setContentsMargins(0, 0, 0, 0)
-        
-        # Создаем кнопки для поля игрока
-        self.player_buttons = []
-        for i in range(10):
-            row = []
-            for j in range(10):
-                button = QPushButton()
-                button.setFixedSize(40, 40)
-                button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #e0e0e0;
-                        border: 1px solid #cccccc;
-                    }
-                    QPushButton:hover {
-                        background-color: #cccccc;
-                    }
-                """)
-                button.clicked.connect(lambda checked, x=i, y=j: self.on_player_board_click(x, y))
-                player_grid.addWidget(button, i, j)
-                row.append(button)
-            self.player_buttons.append(row)
-        
-        # Создаем кнопки для поля компьютера
-        self.computer_buttons = []
-        for i in range(10):
-            row = []
-            for j in range(10):
-                button = QPushButton()
-                button.setFixedSize(40, 40)
-                button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #e0e0e0;
-                        border: 1px solid #cccccc;
-                    }
-                    QPushButton:hover {
-                        background-color: #cccccc;
-                    }
-                """)
-                button.clicked.connect(lambda checked, x=i, y=j: self.on_computer_board_click(x, y))
-                computer_grid.addWidget(button, i, j)
-                row.append(button)
-            self.computer_buttons.append(row)
-        
-        # Добавляем сетки в layout
-        layout.addLayout(player_grid)
-        layout.addLayout(computer_grid)
-        
-        # Устанавливаем фоновое изображение
-        # Загружаем фон из ресурсов
-        pixmap = load_image_from_resource(':/images/game_background.jpg')
-        if not pixmap.isNull():
-            self.game_widget.setStyleSheet("""
-                QWidget { 
-                    background-color: transparent;
-                }
-            """)
-            # Устанавливаем фон через палитру
-            self.game_widget.setPalette(global_palette)
-            self.game_widget.setAutoFillBackground(True)
-        
-        # Обновляем отображение
         self.update_board_display()
+        
+        # Проверяем конец игры сразу после хода
+        if self.game_logic.check_game_over():
+            winner = "Вы" if self.game_logic.winner == "player" else "Компьютер"
+            self.show_result(winner)
+
+
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_R and self.stacked_widget.currentWidget() == self.ship_setup_widget:
-            self.is_horizontal = not self.is_horizontal
-            self.orientation_label.setText(
-                "Горизонтально" if self.is_horizontal else "Вертикально"
-            )
-        else:
-            super().keyPressEvent(event)
+        super().keyPressEvent(event)
