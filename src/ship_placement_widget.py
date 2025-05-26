@@ -93,41 +93,63 @@ class ShipPlacementWidget(QWidget):
         left_layout.setContentsMargins(30, 0, 0, 0)  # Увеличиваем отступ слева до 30 пикселей
         layout.addLayout(left_layout)
         
-        # Правая часть - панель кораблей и кнопки
-        right_layout = QVBoxLayout()
-        right_layout.setSpacing(20)
-        
-        # Создаем кнопки для каждого размера корабля
+        # Создаем горизонтальный layout для правой панели
+        right_layout = QHBoxLayout()
+        right_layout.setSpacing(10)
+        right_layout.setAlignment(Qt.AlignCenter)
+        right_layout.setContentsMargins(10, 10, 10, 10)
+
+        # Добавляем корабли в правую панель
         ship_counts = {4: 1, 3: 2, 2: 3, 1: 4}
         for size, count in ship_counts.items():
             # Создаем QLabel для отображения корабля
             ship_label = QLabel()
-            ship_label.setFixedSize(size * 30, 30)
-            ship_label.setStyleSheet("""
-                QLabel {
-                    border: 1px solid white;
-                    background-color: rgba(0, 0, 139, 0.5);
-                    color: white;
-                }
-            """)
+            ship_label.setFixedSize(30, size * 30)  # Меняем размеры для вертикального отображения
+            
+            # Загружаем изображение корабля
+            ship_name = {
+                1: '1_deck_ship',
+                2: '2_deck_ship',
+                3: '3_deck_ship',
+                4: '4_deck_ship'
+            }[size]
+            ship_image_path = Path(f"src/images/{ship_name}.png")
+            if ship_image_path.exists():
+                pixmap = QPixmap(str(ship_image_path))
+                # Поворачиваем изображение на 90 градусов
+                pixmap = pixmap.transformed(QTransform().rotate(90))
+                ship_label.setPixmap(pixmap)
+                ship_label.setScaledContents(True)
             
             # Создаем QLabel для отображения количества
             count_label = QLabel()
-            count_label.setText(f"{count}/{count}")
+            count_label.setText(f"{self.ship_counters[size]}\nосталось")
             count_label.setAlignment(Qt.AlignCenter)
             count_label.setStyleSheet("""
                 QLabel {
-                    border: 1px solid white;
-                    background-color: rgba(0, 0, 139, 0.5);
                     color: white;
+                    font-size: 12px;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    border-radius: 5px;
+                    padding: 2px;
+                    margin-top: 5px;
                     min-width: 50px;
-                    min-height: 30px;
                 }
             """)
             
-            # Добавляем корабль и счетчик в layout
-            right_layout.addWidget(ship_label)
-            right_layout.addWidget(count_label)
+            # Создаем вертикальный layout для корабля и его количества
+            ship_layout = QVBoxLayout()
+            ship_layout.setSpacing(0)  # Убираем лишний отступ между элементами
+            ship_layout.addWidget(ship_label)
+            ship_layout.addWidget(count_label)
+            
+            # Создаем горизонтальный layout для корабля
+            ship_layout_h = QHBoxLayout()
+            ship_layout_h.addLayout(ship_layout)
+            ship_layout_h.setAlignment(Qt.AlignCenter)
+            
+            # Добавляем корабль и счетчик в основной layout
+            right_layout.addLayout(ship_layout_h)
             
             # Сохраняем пару QLabel'ов для дальнейшего использования
             self.ship_images.append((ship_label, count_label))
@@ -180,31 +202,46 @@ class ShipPlacementWidget(QWidget):
         for size, count in ship_counts.items():
             # Создаем QLabel для отображения корабля
             ship_label = QLabel()
-            ship_label.setFixedSize(size * 30, 30)
-            ship_label.setStyleSheet("""
-                QLabel {
-                    border: 1px solid black;
-                    background-color: rgba(0, 0, 139, 0.5);
-                    color: white;
-                }
-            """)
+            ship_label.setFixedSize(30, size * 30)  # Меняем размеры для вертикального отображения
+            
+            # Загружаем изображение корабля
+            ship_name = {
+                1: '1_deck_ship',
+                2: '2_deck_ship',
+                3: '3_deck_ship',
+                4: '4_deck_ship'
+            }[size]
+            ship_image_path = Path(f"src/images/{ship_name}.png")
+            if ship_image_path.exists():
+                pixmap = QPixmap(str(ship_image_path))
+                # Поворачиваем изображение на 90 градусов
+                pixmap = pixmap.transformed(QTransform().rotate(90))
+                ship_label.setPixmap(pixmap)
+                ship_label.setScaledContents(True)
             
             # Создаем QLabel для отображения количества
             count_label = QLabel()
-            count_label.setText(f"{count}/{count}")
+            count_label.setText(f"{self.ship_counters[size]}\nосталось")
             count_label.setAlignment(Qt.AlignCenter)
             count_label.setStyleSheet("""
                 QLabel {
-                    border: 1px solid black;
-                    background-color: rgba(0, 0, 139, 0.5);
                     color: white;
+                    font-size: 12px;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    border-radius: 5px;
+                    padding: 2px;
+                    margin-top: 5px;
                     min-width: 50px;
-                    min-height: 30px;
                 }
             """)
             
-            # Добавляем корабль и счетчик в layout
+            # Создаем вертикальный layout для корабля и его количества
+            ship_layout = QVBoxLayout()
+            ship_layout.setSpacing(0)  # Убираем лишний отступ между элементами
             ship_layout.addWidget(ship_label)
+            ship_layout.addWidget(count_label)
+            
+            # Добавляем корабль и счетчик в layout
             ship_layout.addWidget(count_label)
             
             # Сохраняем пару QLabel'ов для дальнейшего использования
