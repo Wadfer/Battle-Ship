@@ -1,8 +1,0 @@
-<!DOCTYPE RCC><RCC version="1.0">
-    <qresource>
-        <file>images/menu_background.jpg</file>
-        <file>images/game_background.jpg</file>
-        <file>images/win_result_background.jpg</file>
-        <file>images/loss_result_background.jpg</file>
-    </qresource>
-</RCC>
