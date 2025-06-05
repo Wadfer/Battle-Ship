@@ -247,12 +247,13 @@ class ShipPlacementScreen(QMainWindow):
         self.initUI()
 
     def initUI(self):
+        """Создание и настройка экрана расстановки кораблей"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(20, 50, 20, 20)
 
-        # Game board
+        # Игровое поле
         board_widget = QWidget()
         board_widget.setObjectName('game_board')
         board_layout = QVBoxLayout(board_widget)
@@ -263,19 +264,19 @@ class ShipPlacementScreen(QMainWindow):
         board_layout.addWidget(board_title)
         grid_layout = QGridLayout()
         grid_layout.setSpacing(1)
-        # Column labels
+        # Подписи столбцов
         for i, letter in enumerate('АБВГДЕЖЗИК'):
             label = QLabel(letter)
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet('color: white; font-weight: bold; font-size: 16px;')
             grid_layout.addWidget(label, 0, i + 1)
-        # Row labels
+        # Подписи строк
         for i in range(1, 11):
             label = QLabel(str(i))
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet('color: white; font-weight: bold; font-size: 16px;')
             grid_layout.addWidget(label, i, 0)
-        # Cells
+        # Клетки поля
         self.cells = {}
         for row in range(1, 11):
             for col in range(1, 11):
@@ -294,7 +295,7 @@ class ShipPlacementScreen(QMainWindow):
         board_layout.addLayout(grid_layout)
         main_layout.addWidget(board_widget)
 
-        # Ship panel
+        # Панель кораблей
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(30)
@@ -315,7 +316,7 @@ class ShipPlacementScreen(QMainWindow):
                 self.ship_previews.append(ship)
                 ship_container_layout.addWidget(ship)
         right_layout.addWidget(ship_container)
-        # Control buttons
+        # Панель управления
         control_panel = QWidget()
         control_layout = QVBoxLayout(control_panel)
         control_layout.setSpacing(15)
@@ -339,7 +340,7 @@ class ShipPlacementScreen(QMainWindow):
         self.set_background()
         self.update_start_btn()
 
-    # Drag & Drop logic
+    # Drag & Drop логика
     def start_drag_ship(self, event, ship):
         if event.button() == Qt.LeftButton:
             self.dragged_ship = ship
@@ -372,7 +373,7 @@ class ShipPlacementScreen(QMainWindow):
         self.return_ship_to_panel(ship)
 
     def cell_hover_enter(self, row, col):
-        pass  # Можно реализовать визуальную подсветку
+        pass  # Здесь можно реализовать визуальную подсветку
     def cell_hover_leave(self, row, col):
         pass
     def cell_drag_enter(self, event):
@@ -389,14 +390,14 @@ class ShipPlacementScreen(QMainWindow):
                 ship.setFixedSize(40, ship.ship_size * 40)
 
     def can_place_ship(self, row, col, size, is_horizontal):
-        # Проверка границ
+        # Проверка границ поля
         if is_horizontal:
             if col + size > self.FIELD_SIZE:
                 return False
         else:
             if row + size > self.FIELD_SIZE:
                 return False
-        # Проверка на соприкосновение
+        # Проверка на соприкосновение с другими кораблями
         for i in range(size):
             r = row + (0 if is_horizontal else i)
             c = col + (i if is_horizontal else 0)
@@ -416,12 +417,12 @@ class ShipPlacementScreen(QMainWindow):
         for s in self.placed_ships:
             if s['widget'] == ship:
                 self.remove_ship_from_board(ship)
-        # Обновляем board
+        # Обновляем board (занимаем клетки)
         for i in range(ship.ship_size):
             r = row + (0 if ship.is_horizontal else i)
             c = col + (i if ship.is_horizontal else 0)
             self.board[r][c] = 1
-        # Перемещаем виджет
+        # Перемещаем виджет корабля на поле
         first_cell = self.cells[(row, col)]
         cell_pos = first_cell.mapTo(self, QPoint(0, 0))
         ship.setParent(self)
@@ -432,7 +433,7 @@ class ShipPlacementScreen(QMainWindow):
         self.update_start_btn()
 
     def remove_ship_from_board(self, ship):
-        # Находим и удаляем с board
+        # Находим и удаляем корабль с board
         for s in self.placed_ships:
             if s['widget'] == ship:
                 row, col, horizontal, size = s['row'], s['col'], s['horizontal'], ship.ship_size
@@ -445,6 +446,7 @@ class ShipPlacementScreen(QMainWindow):
         self.update_start_btn()
 
     def return_ship_to_panel(self, ship):
+        # Возвращаем корабль на панель
         ship.setParent(self.ship_previews[0].parent())
         ship.show()
         ship.raise_()
@@ -475,6 +477,7 @@ class ShipPlacementScreen(QMainWindow):
                     break
 
     def clear_board(self):
+        # Очищаем всё поле и возвращаем все корабли на панель
         self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]
         for s in self.placed_ships[:]:
             self.return_ship_to_panel(s['widget'])
@@ -482,6 +485,7 @@ class ShipPlacementScreen(QMainWindow):
         self.update_start_btn()
 
     def start_game(self):
+        # Проверяем, все ли корабли размещены
         if len(self.placed_ships) == sum(c for _, c in self.SHIPS_SET):
             ships = [(s['row']+1, s['col']+1, s['widget'].ship_size, s['widget'].is_horizontal) for s in self.placed_ships]
             from game_screen import GameScreen
@@ -490,9 +494,11 @@ class ShipPlacementScreen(QMainWindow):
             self.close()
 
     def update_start_btn(self):
+        # Кнопка "Начать игру" активна только если все корабли размещены
         self.start_btn.setEnabled(len(self.placed_ships) == sum(c for _, c in self.SHIPS_SET))
 
     def set_background(self):
+        """Установка фонового изображения для экрана расстановки кораблей"""
         background_path = 'assets/ship_placement_background.jpg'
         if os.path.exists(background_path):
             palette = QPalette()
@@ -502,9 +508,10 @@ class ShipPlacementScreen(QMainWindow):
                 palette.setBrush(QPalette.Window, QBrush(scaled_pixmap))
                 self.setPalette(palette)
                 return
-        self.setStyleSheet('QMainWindow {background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a237e, stop:1 #0d47a1);}')
+        self.setStyleSheet('QMainWindow {background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a237e, stop:1 #0d47a1);} ')
 
     def go_back(self):
+        """Переход в главное меню"""
         from main import MainMenu
         self.main_menu = MainMenu()
         self.main_menu.show()

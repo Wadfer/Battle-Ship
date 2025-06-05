@@ -9,6 +9,7 @@ from datetime import datetime
 class GameScreen(QMainWindow):
     def __init__(self, player_ships):
         super().__init__()
+        # Инициализация экрана игры
         self.player_ships = player_ships
         self.player_board = [[0 for _ in range(10)] for _ in range(10)]
         self.computer_board = [[0 for _ in range(10)] for _ in range(10)]
@@ -21,13 +22,12 @@ class GameScreen(QMainWindow):
             'player_ships_destroyed': 0,
             'computer_ships_destroyed': 0
         }
-        # AI targeting variables
+        # Переменные для ИИ
         self.last_hit = None
         self.hunting_mode = False
         self.hit_direction = None
         self.possible_targets = []
-        
-        # Initialize AI shot timer
+        # Таймер для задержки выстрела ИИ
         self.shot_timer = QTimer()
         self.shot_timer.setSingleShot(True)
         self.shot_timer.timeout.connect(self.make_computer_shot)
@@ -37,6 +37,7 @@ class GameScreen(QMainWindow):
         self.place_player_ships()
         
     def initUI(self):
+        """Создание и настройка экрана игры"""
         self.setWindowTitle('Морской бой - Игра')
         self.setFixedSize(1200, 700)
         
@@ -200,6 +201,7 @@ class GameScreen(QMainWindow):
         self.set_background()
         
     def place_computer_ships(self):
+        """Размещение кораблей компьютера на скрытом поле"""
         ships = [(4, 1), (3, 2), (2, 3), (1, 4)]
         for size, count in ships:
             for _ in range(count):
@@ -220,6 +222,7 @@ class GameScreen(QMainWindow):
                         break
     
     def place_player_ships(self):
+        """Размещение кораблей игрока на видимом поле"""
         for start_pos, size, is_horizontal in self.player_ships:
             row, col = start_pos
             row -= 1  # Convert to 0-based indexing
@@ -239,6 +242,7 @@ class GameScreen(QMainWindow):
                 """)
     
     def can_place_ship(self, board, row, col, size, is_horizontal):
+        """Проверка возможности размещения корабля на поле"""
         if is_horizontal:
             if col + size > 10:
                 return False
@@ -254,6 +258,7 @@ class GameScreen(QMainWindow):
         return True
     
     def is_valid_placement(self, board, row, col):
+        """Проверка валидности клетки для размещения корабля"""
         # Check if the cell and its surroundings are empty
         for r in range(max(0, row - 1), min(10, row + 2)):
             for c in range(max(0, col - 1), min(10, col + 2)):
@@ -262,6 +267,7 @@ class GameScreen(QMainWindow):
         return True
     
     def place_ship(self, board, row, col, size, is_horizontal):
+        """Фактическое размещение корабля на поле"""
         if is_horizontal:
             for i in range(size):
                 board[row][col + i] = 1
@@ -288,6 +294,7 @@ class GameScreen(QMainWindow):
                     """)
     
     def make_shot(self, row, col):
+        """Обработка выстрела игрока по полю противника"""
         if not self.player_turn:
             return
             
@@ -336,6 +343,7 @@ class GameScreen(QMainWindow):
             self.computer_turn()
     
     def is_ship_destroyed(self, board, row, col):
+        """Проверка, уничтожен ли корабль полностью"""
         # Find the ship's cells
         ship_cells = []
         # Check horizontal
@@ -361,6 +369,7 @@ class GameScreen(QMainWindow):
         return all(board[r][c] == 3 for r, c in ship_cells)
     
     def mark_surrounding_cells(self, row, col):
+        """Отметить клетки вокруг уничтоженного корабля"""
         # Find the ship's cells
         ship_cells = []
         # Check horizontal
@@ -397,10 +406,12 @@ class GameScreen(QMainWindow):
                         """)
     
     def computer_turn(self):
+        """Запуск таймера для выстрела ИИ"""
         # Start the timer for delayed shot
         self.shot_timer.start(500)  # 0.5 second delay
     
     def make_computer_shot(self):
+        """Логика выстрела ИИ"""
         if not self.player_turn:  # Additional check to prevent multiple shots
             if self.hunting_mode:
                 # If we have a hit, try to find the rest of the ship
@@ -504,6 +515,7 @@ class GameScreen(QMainWindow):
                     break
     
     def fire_shot(self, row, col):
+        """Обработка выстрела ИИ по полю игрока"""
         if self.player_board[row][col] == 1:  # Hit
             self.player_board[row][col] = 3
             self.player_cells[(row + 1, col + 1)].setStyleSheet("""
@@ -549,6 +561,7 @@ class GameScreen(QMainWindow):
             self.player_turn = True
     
     def mark_surrounding_cells_player(self, row, col):
+        """Отметить клетки вокруг уничтоженного корабля игрока"""
         # Find the ship's cells
         ship_cells = []
         # Check horizontal
@@ -585,15 +598,18 @@ class GameScreen(QMainWindow):
                         """)
     
     def check_winner(self, board):
+        """Проверка победы (нет оставшихся кораблей)"""
         return all(cell != 1 for row in board for cell in row)
     
     def show_result(self, player_won):
+        """Показать экран результата игры"""
         from result_screen import ResultScreen
         self.result_screen = ResultScreen(player_won, self.game_stats)
         self.result_screen.show()
         self.close()
     
     def set_background(self):
+        """Установка фонового изображения для экрана игры"""
         try:
             background_path = "assets/Game_background.jpg"
             if os.path.exists(background_path):

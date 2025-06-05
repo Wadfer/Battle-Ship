@@ -19,6 +19,7 @@ class ResultScreen(QMainWindow):
         self.initUI()
         
     def initUI(self):
+        """Создание и настройка экрана результата"""
         self.setWindowTitle('Морской бой - Результат')
         self.setFixedSize(1000, 700)
         
@@ -112,6 +113,7 @@ class ResultScreen(QMainWindow):
         self.set_background()
         
     def set_background(self):
+        """Установка фонового изображения для экрана результата"""
         try:
             background_name = "win_result_background.jpg" if self.player_won else "loss_result_background.jpg"
             background_path = os.path.join("assets", background_name)
@@ -135,6 +137,7 @@ class ResultScreen(QMainWindow):
         """)
     
     def go_back(self):
+        """Переход в главное меню"""
         from main import MainMenu
         self.main_menu = MainMenu()
         self.main_menu.show()
