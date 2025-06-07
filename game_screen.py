@@ -41,18 +41,18 @@ class GameScreen(QMainWindow):
         self.setWindowTitle('Морской бой - Игра')
         self.setFixedSize(1200, 700)
         
-        # Create central widget and main layout
+        # Создайте центральный виджет и основной макет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)  # Reduced top margin from 50 to 20
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
-        # Create player's board
+        # Создаk игровую доску для игрока
         player_board_widget = QWidget()
         player_layout = QVBoxLayout(player_board_widget)
-        player_layout.setSpacing(20)  # Add spacing between title and board
+        player_layout.setSpacing(20)
         
-        # Add player's board title
+        # Добави название игрового поля игрока
         player_title = QLabel("Ваше поле")
         player_title.setAlignment(Qt.AlignCenter)
         player_title.setStyleSheet("""

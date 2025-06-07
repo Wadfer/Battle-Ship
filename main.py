@@ -12,18 +12,18 @@ class MainMenu(QMainWindow):
         self.initUI()
         
     def initUI(self):
-        # Set window properties
+        # Настройка свойств окна
         self.setWindowTitle('Морской бой')
         self.setFixedSize(1200, 700)
         
-        # Create central widget and layout
+        # Создаем центральный виджет и макет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(20)
         
-        # Add title
+        # Добавил заголовок
         title_label = QLabel('МОРСКОЙ БОЙ', self)
         title_label.setAlignment(Qt.AlignCenter)
         title_label.setStyleSheet("""
@@ -37,12 +37,12 @@ class MainMenu(QMainWindow):
         """)
         layout.addWidget(title_label)
         
-        # Create buttons
+        # Создание кнопок
         new_game_btn = QPushButton('Новая игра', self)
         rules_btn = QPushButton('Правила', self)
         exit_btn = QPushButton('Выход', self)
         
-        # Style buttons
+        # стили кнопок
         button_style = """
             QPushButton {
                 background-color: rgba(74, 74, 74, 180);
