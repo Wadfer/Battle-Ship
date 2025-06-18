@@ -6,6 +6,11 @@ from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
 from PyQt5.QtCore import Qt
 from ship_placement import ShipPlacementScreen
 
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
+
 class MainMenu(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -78,7 +83,7 @@ class MainMenu(QMainWindow):
     def set_background(self):
         try:
             # Try to load background from assets directory
-            background_path = os.path.join("assets", "menu_background.jpg")
+            background_path = resource_path("assets/menu_background.jpg")
             if os.path.exists(background_path):
                 palette = QPalette()
                 pixmap = QPixmap(background_path)

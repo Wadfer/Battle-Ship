@@ -6,6 +6,12 @@ from PyQt5.QtGui import QPixmap, QPalette, QBrush, QColor, QPainter, QPen, QCurs
 import os
 import random
 from PyQt5.QtWidgets import QApplication
+import sys
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 class ShipPreview(QWidget):
     def __init__(self, size, parent=None, placement_screen=None):
@@ -48,9 +54,8 @@ class ShipPreview(QWidget):
                 self._drag_start_pos = event.pos()
                 self._drag_initiated = False
             elif self.is_placed:
-                # Начинаем drag размещенного корабля
-                if self.placement_screen:
-                    self.placement_screen.start_drag_ship(event, self, from_field=True)
+                # Запрещаем любые действия с уже выставленным кораблем
+                return
 
     def mouseMoveEvent(self, event):
         if self.is_template and not self.is_placed and self._drag_start_pos is not None:
@@ -872,7 +877,7 @@ class ShipPlacementScreen(QMainWindow):
             self.start_btn.setText(f"Осталось разместить: {total_ships - placed_ships}")
 
     def set_background(self):
-        background_path = 'assets/ship_placement_background.jpg'
+        background_path = resource_path(os.path.join('assets', 'ship_placement_background.jpg'))
         if os.path.exists(background_path):
             palette = QPalette()
             pixmap = QPixmap(background_path)

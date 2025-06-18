@@ -4,6 +4,12 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPalette, QBrush
 import os
 from datetime import datetime
+import sys
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 class ResultScreen(QMainWindow):
     def __init__(self, player_won, game_stats=None):
@@ -116,7 +122,7 @@ class ResultScreen(QMainWindow):
         """Установка фонового изображения для экрана результата"""
         try:
             background_name = "win_result_background.jpg" if self.player_won else "loss_result_background.jpg"
-            background_path = os.path.join("assets", background_name)
+            background_path = resource_path(os.path.join("assets", background_name))
             if os.path.exists(background_path):
                 palette = QPalette()
                 pixmap = QPixmap(background_path)

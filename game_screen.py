@@ -5,6 +5,12 @@ from PyQt5.QtGui import QPixmap, QPalette, QBrush
 import os
 import random
 from datetime import datetime
+import sys
+
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath('.'), relative_path)
 
 class GameScreen(QMainWindow):
     def __init__(self, player_ships):
@@ -40,14 +46,19 @@ class GameScreen(QMainWindow):
         """Создание и настройка экрана игры"""
         self.setWindowTitle('Морской бой - Игра')
         self.setFixedSize(1200, 700)
-        
-        # Создайте центральный виджет и основной макет
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        
-        # Создаk игровую доску для игрока
+
+        # Внешний вертикальный layout
+        outer_layout = QVBoxLayout(central_widget)
+        outer_layout.setContentsMargins(20, 20, 20, 20)
+        outer_layout.setSpacing(0)
+
+        # Горизонтальный layout для игровых полей
+        main_layout = QHBoxLayout()
+        main_layout.setAlignment(Qt.AlignCenter)
+
+        # --- Игровые доски ---
         player_board_widget = QWidget()
         player_layout = QVBoxLayout(player_board_widget)
         player_layout.setSpacing(20)
@@ -193,11 +204,34 @@ class GameScreen(QMainWindow):
         
         computer_layout.addLayout(computer_grid)
         
-        # Add boards to main layout
         main_layout.addWidget(player_board_widget)
         main_layout.addWidget(computer_board_widget)
-        
-        # Set background
+        outer_layout.addLayout(main_layout)
+        outer_layout.addStretch()
+
+        # Кнопка "Главное меню" в левом нижнем углу
+        menu_btn = QPushButton('Главное меню')
+        menu_btn.setStyleSheet('''
+            QPushButton {
+                background-color: #4a4a4a;
+                color: white;
+                border: 2px solid #666666;
+                border-radius: 5px;
+                padding: 10px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #666666;
+            }
+        ''')
+        menu_btn.setFixedWidth(180)
+        menu_btn.clicked.connect(self.go_to_main_menu)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addWidget(menu_btn)
+        bottom_layout.addStretch()
+        outer_layout.addLayout(bottom_layout)
+
         self.set_background()
         
     def place_computer_ships(self):
@@ -611,7 +645,7 @@ class GameScreen(QMainWindow):
     def set_background(self):
         """Установка фонового изображения для экрана игры"""
         try:
-            background_path = "assets/Game_background.jpg"
+            background_path = resource_path(os.path.join("assets", "Game_background.jpg"))
             if os.path.exists(background_path):
                 palette = QPalette()
                 pixmap = QPixmap(background_path)
@@ -629,4 +663,10 @@ class GameScreen(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                                           stop:0 #1a237e, stop:1 #0d47a1);
             }
-        """) 
+        """)
+
+    def go_to_main_menu(self):
+        from main import MainMenu
+        self.main_menu = MainMenu()
+        self.main_menu.show()
+        self.close() 
