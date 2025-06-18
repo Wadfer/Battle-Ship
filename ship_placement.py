@@ -36,51 +36,81 @@ class ShipPreview(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_NoSystemBackground)
         self.setAttribute(Qt.WA_OpaquePaintEvent)
-
+        self.setFocusPolicy(Qt.StrongFocus)
+        self._drag_start_pos = None
+        self._drag_initiated = False
+        self.is_template = True  # Для шаблонных кораблей на панели
+        self.is_temp_dragged = False  # True для временного экземпляра
+        
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and not self.is_placed:
-            self.is_dragging = True
-            self.drag_start_pos = event.pos()
-            self.original_pos = self.pos()
-            self.original_parent = self.parent()
-            self.setCursor(Qt.ClosedHandCursor)
-            self.raise_()
+        if event.button() == Qt.LeftButton:
+            if self.is_template and not self.is_placed:
+                self._drag_start_pos = event.pos()
+                self._drag_initiated = False
+            elif self.is_placed:
+                # Начинаем drag размещенного корабля
+                if self.placement_screen:
+                    self.placement_screen.start_drag_ship(event, self, from_field=True)
 
     def mouseMoveEvent(self, event):
-        if self.is_dragging and not self.is_placed:
-            new_pos = self.mapToParent(event.pos() - self.drag_start_pos)
-            self.move(new_pos)
+        if self.is_template and not self.is_placed and self._drag_start_pos is not None:
+            if (event.pos() - self._drag_start_pos).manhattanLength() > QApplication.startDragDistance():
+                if not self._drag_initiated:
+                    self._drag_initiated = True
+                    if self.placement_screen:
+                        self.placement_screen.start_drag_ship(event, self, from_field=False)
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.is_dragging and not self.is_placed:
-            self.is_dragging = False
-            self.setCursor(Qt.OpenHandCursor)
-            
-            # Проверяем, можно ли разместить корабль
-            game_board = self.placement_screen.findChild(QWidget, "game_board")
-            if game_board:
-                center_pos = self.mapTo(game_board, self.rect().center())
-                if game_board.geometry().contains(center_pos):
-                    target_cell = None
-                    target_pos = None
-                    min_distance = float('inf')
-                    
-                    for pos, cell in self.placement_screen.cells.items():
+        if self.is_dragging and self.is_temp_dragged:
+            # Найти ближайшую клетку
+            if self.placement_screen:
+                game_board = self.placement_screen.findChild(QWidget, "game_board")
+                if game_board:
+                    global_mouse = self.mapToGlobal(event.pos())
+                    board_mouse = game_board.mapFromGlobal(global_mouse)
+                    min_dist = float('inf')
+                    snap_pos = None
+                    for (row, col), cell in self.placement_screen.cells.items():
                         cell_center = cell.rect().center()
                         cell_center_global = cell.mapTo(game_board, cell_center)
-                        distance = (center_pos - cell_center_global).manhattanLength()
-                        
-                        if distance < min_distance:
-                            min_distance = distance
-                            target_cell = cell
-                            target_pos = pos
-                    
-                    if target_cell and self.placement_screen.can_place_ship(target_pos[0], target_pos[1], self.ship_size, self.is_horizontal):
-                        self.placement_screen.place_ship_on_board(self, target_pos[0], target_pos[1])
-                        return
-            
-            # Если не удалось разместить, возвращаем на место
-            self.return_to_original_position()
+                        dist = (board_mouse - cell_center_global).manhattanLength()
+                        if dist < min_dist:
+                            min_dist = dist
+                            snap_pos = (row, col, cell)
+                    if snap_pos:
+                        row, col, cell = snap_pos
+                        # Позиционируем корабль по левому верхнему углу клетки
+                        cell_pos = cell.mapTo(self.placement_screen, QPoint(0, 0))
+                        self.move(cell_pos)
+                        # Подсветка
+                        can_place = self.placement_screen.can_place_ship(row, col, self.ship_size, self.is_horizontal)
+                        self.highlight_ship_cells(row, col, can_place)
+                        self.is_valid_placement = can_place
+                        self.is_invalid_position = not can_place
+                        self.update()
+                        self._snap_row = row
+                        self._snap_col = col
+                    else:
+                        self.highlight_ship_cells(-1, -1, False)
+                        self.is_valid_placement = True
+                        self.is_invalid_position = False
+                        self.update()
+                        self._snap_row = None
+                        self._snap_col = None
+
+    def mouseReleaseEvent(self, event):
+        if self.is_dragging and self.is_temp_dragged:
+            self.is_dragging = False
+            self.setCursor(Qt.OpenHandCursor)
+            placed = False
+            if hasattr(self, '_snap_row') and self._snap_row is not None and self._snap_col is not None:
+                if self.placement_screen and self.placement_screen.can_place_ship(self._snap_row, self._snap_col, self.ship_size, self.is_horizontal):
+                    placed = self.placement_screen.try_place_dragged_ship(self, self._snap_row, self._snap_col)
+            if not placed:
+                # Если не удалось разместить — удалить экземпляр и вернуть счетчик, если drag был с панели
+                if hasattr(self, 'from_panel') and self.from_panel:
+                    self.placement_screen.update_ship_count(self.ship_size, 1)
+                    self.placement_screen.available_ships[self.ship_size]['template'].setVisible(True)
+                self.deleteLater()
 
     def return_to_original_position(self):
         """Возврат корабля на исходную позицию"""
@@ -88,6 +118,19 @@ class ShipPreview(QWidget):
             self.setParent(self.original_parent)
             self.move(self.original_pos)
             self.show()
+            self.is_valid_placement = True
+            self.is_invalid_position = False
+            self.update()
+
+    def mouseDoubleClickEvent(self, event):
+        """Поворот корабля при двойном клике"""
+        if not self.is_placed:
+            self.is_horizontal = not self.is_horizontal
+            if self.is_horizontal:
+                self.setFixedSize(self.ship_size * 25, 25)
+            else:
+                self.setFixedSize(25, self.ship_size * 25)
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -160,15 +203,15 @@ class ShipPreview(QWidget):
                 QPoint(width // 2, height),
                 QPoint(width, height - 5)
             ])
-
+            
     def rotate(self):
-        if not self.is_dragging and not self.is_placed:
+        """Поворот корабля"""
+        if not self.is_placed:
             self.is_horizontal = not self.is_horizontal
-            cell_size = self.field_cell_size if self.is_placed else 25
             if self.is_horizontal:
-                self.setFixedSize(self.ship_size * cell_size, cell_size)
+                self.setFixedSize(self.ship_size * 25, 25)
             else:
-                self.setFixedSize(cell_size, self.ship_size * cell_size)
+                self.setFixedSize(25, self.ship_size * 25)
             self.update()
 
     def place_on_field(self, row, col):
@@ -209,6 +252,8 @@ class ShipPreview(QWidget):
             self.update()
 
     def highlight_ship_cells(self, row, col, is_valid):
+        """Подсветка клеток при перетаскивании корабля"""
+        # Сбрасываем предыдущую подсветку
         for cell in self.current_cells:
             cell.setStyleSheet("""
                 QPushButton {
@@ -222,33 +267,43 @@ class ShipPreview(QWidget):
         
         self.current_cells = []
         
-        for i in range(self.ship_size):
-            r = row + (0 if self.is_horizontal else i)
-            c = col + (i if self.is_horizontal else 0)
-            if 0 <= r < 10 and 0 <= c < 10:
-                cell = self.parent().cells.get((r, c))
-                if cell:
-                    self.current_cells.append(cell)
-                    if is_valid:
-                        cell.setStyleSheet("""
-                            QPushButton {
-                                background-color: rgba(0, 255, 0, 50);
-                                border: 1px solid rgba(0, 255, 0, 100);
-                            }
-                            QPushButton:hover {
-                                background-color: rgba(0, 255, 0, 70);
-                            }
-                        """)
-                    else:
-                        cell.setStyleSheet("""
-                            QPushButton {
-                                background-color: rgba(255, 0, 0, 50);
-                                border: 1px solid rgba(255, 0, 0, 100);
-                            }
-                            QPushButton:hover {
-                                background-color: rgba(255, 0, 0, 70);
-                            }
-                        """)
+        if row >= 0 and col >= 0:
+            # Подсвечиваем новые клетки
+            for i in range(self.ship_size):
+                r = row + (0 if self.is_horizontal else i)
+                c = col + (i if self.is_horizontal else 0)
+                if 0 <= r < 10 and 0 <= c < 10:
+                    cell = self.placement_screen.cells.get((r, c))
+                    if cell:
+                        self.current_cells.append(cell)
+                        if is_valid:
+                            cell.setStyleSheet("""
+                                QPushButton {
+                                    background-color: rgba(0, 255, 0, 50);
+                                    border: 1px solid rgba(0, 255, 0, 100);
+                                }
+                                QPushButton:hover {
+                                    background-color: rgba(0, 255, 0, 70);
+                                }
+                            """)
+                        else:
+                            cell.setStyleSheet("""
+                                QPushButton {
+                                    background-color: rgba(255, 0, 0, 50);
+                                    border: 1px solid rgba(255, 0, 0, 100);
+                                }
+                                QPushButton:hover {
+                                    background-color: rgba(255, 0, 0, 70);
+                                }
+                            """)
+
+    def keyPressEvent(self, event):
+        # Поворот по R или русской К
+        if event.key() == Qt.Key_R or event.text().upper() == 'К':
+            if self.is_dragging and self.is_temp_dragged:
+                self.rotate()
+                if self.placement_screen:
+                    self.placement_screen.snap_dragged_ship(self)
 
 class ShipPlacementScreen(QMainWindow):
     FIELD_SIZE = 10
@@ -265,7 +320,8 @@ class ShipPlacementScreen(QMainWindow):
         self.dragged_ship = None
         self.drag_offset = None
         self.initUI()
-
+        self.setFocusPolicy(Qt.StrongFocus)  # Добавляем возможность получать фокус
+        
     def initUI(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -296,14 +352,14 @@ class ShipPlacementScreen(QMainWindow):
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet('color: white; font-weight: bold; font-size: 16px;')
             grid_layout.addWidget(label, 0, i + 1)
-            
+        
         # Подписи строк
         for i in range(1, 11):
             label = QLabel(str(i))
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet('color: white; font-weight: bold; font-size: 16px;')
             grid_layout.addWidget(label, i, 0)
-            
+        
         # Клетки поля
         self.cells = {}
         for row in range(1, 11):
@@ -324,10 +380,10 @@ class ShipPlacementScreen(QMainWindow):
                 cell.clicked.connect(lambda checked, r=row-1, c=col-1: self.cell_clicked(r, c))
                 grid_layout.addWidget(cell, row, col)
                 self.cells[(row-1, col-1)] = cell
-                
+        
         board_layout.addWidget(grid_container)
         main_layout.addWidget(board_container)
-
+        
         # Правая панель
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
@@ -375,24 +431,8 @@ class ShipPlacementScreen(QMainWindow):
             template_ship.setFixedSize(size * 25, 25)
             template_ship.is_horizontal = True
             template_ship.setCursor(Qt.OpenHandCursor)
-            template_ship.mouseDoubleClickEvent = lambda e, s=template_ship: self.rotate_ship(e, s)
+            template_ship.mousePressEvent = lambda e, s=template_ship: self.start_drag_ship(e, s)
             ships_group_layout.addWidget(template_ship)
-            
-            # Создаем все корабли данного типа (невидимые)
-            ship_widgets = []
-            for _ in range(count):
-                ship = ShipPreview(size, ships_group, self)
-                ship.setFixedSize(size * 25, 25)
-                ship.is_horizontal = True
-                ship.setCursor(Qt.OpenHandCursor)
-                ship.mousePressEvent = lambda e, s=ship: self.start_drag_ship(e, s)
-                ship.mouseDoubleClickEvent = lambda e, s=ship: self.rotate_ship(e, s)
-                ship.setVisible(False)  # Скрываем отдельные корабли
-                ships_group_layout.addWidget(ship)
-                ship_widgets.append(ship)
-                QApplication.processEvents()
-                ship.original_pos = ship.pos()
-                ship.original_parent = ships_group
             
             # Метка с количеством
             count_label = QLabel(f"x{count}")
@@ -406,8 +446,7 @@ class ShipPlacementScreen(QMainWindow):
             
             # Сохраняем информацию о кораблях
             self.available_ships[size] = {
-                'widgets': ship_widgets,
-                'template': template_ship,  # Сохраняем шаблонный корабль
+                'template': template_ship,
                 'count': count,
                 'label': count_label
             }
@@ -449,17 +488,17 @@ class ShipPlacementScreen(QMainWindow):
         
         for btn in [random_btn, clear_btn, start_btn, back_btn]:
             btn.setStyleSheet("""
-                QPushButton {
-                    background-color: rgba(74, 74, 74, 180);
-                    color: white;
-                    border: 2px solid #666666;
-                    border-radius: 5px;
-                    padding: 12px;
-                    font-size: 16px;
-                    min-width: 200px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
+            QPushButton {
+                background-color: rgba(74, 74, 74, 180);
+                color: white;
+                border: 2px solid #666666;
+                border-radius: 5px;
+                padding: 12px;
+                font-size: 16px;
+                min-width: 200px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
                     background-color: rgba(94, 94, 94, 180);
                 }
                 QPushButton:disabled {
@@ -486,6 +525,7 @@ class ShipPlacementScreen(QMainWindow):
         self.update_start_btn()
 
     def update_ship_count(self, size, delta):
+        """Обновление счетчика кораблей"""
         if size in self.available_ships:
             ship_info = self.available_ships[size]
             ship_info['count'] = max(0, ship_info['count'] + delta)
@@ -586,41 +626,11 @@ class ShipPlacementScreen(QMainWindow):
 
     def rotate_ship(self, event, ship):
         """Поворот корабля"""
-        if event.button() == Qt.LeftButton or event.button() == Qt.RightButton:
-            # Находим корабль в списке размещенных
-            for ship_info in self.placed_ships:
-                if ship_info['widget'] == ship:
-                    # Проверяем возможность поворота
-                    row, col = ship_info['row'], ship_info['col']
-                    size = ship_info['size']
-                    new_horizontal = not ship_info['horizontal']
-                    
-                    if self.can_place_ship(row, col, size, new_horizontal):
-                        # Очищаем старую позицию
-                        for i in range(size):
-                            r = row + (0 if ship_info['horizontal'] else i)
-                            c = col + (i if ship_info['horizontal'] else 0)
-                            self.board[r][c] = 0
-                        
-                        # Обновляем ориентацию
-                        ship_info['horizontal'] = new_horizontal
-                        ship.is_horizontal = new_horizontal
-                        
-                        # Занимаем новую позицию
-                        for i in range(size):
-                            r = row + (0 if new_horizontal else i)
-                            c = col + (i if new_horizontal else 0)
-                            self.board[r][c] = 1
-                        
-                        # Обновляем размеры и позицию
-                        if new_horizontal:
-                            ship.setFixedSize(size * self.field_cell_size, self.field_cell_size)
-                        else:
-                            ship.setFixedSize(self.field_cell_size, size * self.field_cell_size)
-                        
-                        # Обновляем отображение
-                        self.update()
-                    break
+        try:
+            if event.button() == Qt.LeftButton and not ship.is_placed:
+                ship.rotate()
+        except Exception as e:
+            print(f"Error in rotate_ship: {e}")
 
     def can_place_ship(self, row, col, size, is_horizontal):
         if row < 0 or col < 0:
@@ -632,7 +642,7 @@ class ShipPlacementScreen(QMainWindow):
         else:
             if row + size > self.FIELD_SIZE:
                 return False
-
+        
         for i in range(size):
             r = row + (0 if is_horizontal else i)
             c = col + (i if is_horizontal else 0)
@@ -647,60 +657,101 @@ class ShipPlacementScreen(QMainWindow):
                         if self.board[nr][nc] != 0:
                             return False
         return True
-
+        
     def place_ship_on_board(self, ship, row, col):
         """Размещение корабля на поле"""
-        # Обновляем board (занимаем клетки)
-        for i in range(ship.ship_size):
-            r = row + (0 if ship.is_horizontal else i)
-            c = col + (i if ship.is_horizontal else 0)
-            self.board[r][c] = 1
+        try:
+            # Проверяем возможность размещения
+            if not self.can_place_ship(row, col, ship.ship_size, ship.is_horizontal):
+                ship.return_to_original_position()
+                return
             
-        # Добавляем в список размещенных кораблей
-        self.placed_ships.append({
-            'row': row,
-            'col': col,
-            'horizontal': ship.is_horizontal,
-            'size': ship.ship_size,
-            'widget': ship
-        })
-        
-        # Обновляем счетчик кораблей
-        self.update_ship_count(ship.ship_size, -1)
-        self.update_start_btn()
-        
-        # Позиционируем корабль на поле
-        first_cell = self.cells[(row, col)]
-        cell_pos = first_cell.mapTo(self, QPoint(0, 0))
-        ship.move(cell_pos)
-        ship.is_placed = True
-        ship.show()
-        
-        # Обновляем отображение
-        self.update()
+            # Обновляем board (занимаем клетки)
+            for i in range(ship.ship_size):
+                r = row + (0 if ship.is_horizontal else i)
+                c = col + (i if ship.is_horizontal else 0)
+                self.board[r][c] = 1
+            
+            # Добавляем в список размещенных кораблей
+            self.placed_ships.append({
+                'row': row,
+                'col': col,
+                'horizontal': ship.is_horizontal,
+                'size': ship.ship_size,
+                'widget': ship
+            })
+            
+            # Обновляем счетчик кораблей
+            self.update_ship_count(ship.ship_size, -1)
+            
+            # Позиционируем корабль на поле
+            first_cell = self.cells[(row, col)]
+            cell_pos = first_cell.mapTo(self, QPoint(0, 0))
+            ship.move(cell_pos)
+            ship.is_placed = True
+            ship.current_row = row
+            ship.current_col = col
+            ship.show()
+            
+            # Обновляем отображение
+            self.update()
+            self.update_start_btn()
+            
+        except Exception as e:
+            print(f"Error placing ship: {e}")
+            ship.return_to_original_position()
 
     def remove_ship_from_board(self, ship):
         """Удаление корабля с поля"""
-        for s in self.placed_ships[:]:
-            if (s['row'] == ship.current_row and 
-                s['col'] == ship.current_col and 
-                s['size'] == ship.ship_size and 
-                s['horizontal'] == ship.is_horizontal):
-                # Очищаем клетки на поле
-                for i in range(s['size']):
-                    r = s['row'] + (0 if s['horizontal'] else i)
-                    c = s['col'] + (i if s['horizontal'] else 0)
-                    self.board[r][c] = 0
-                self.placed_ships.remove(s)
-                self.update_ship_count(s['size'], 1)
-                break
-        self.update_start_btn()
-        self.update()
+        try:
+            for s in self.placed_ships[:]:
+                if (s['row'] == ship.current_row and 
+                    s['col'] == ship.current_col and 
+                    s['size'] == ship.ship_size and 
+                    s['horizontal'] == ship.is_horizontal):
+                    # Очищаем клетки на поле
+                    for i in range(s['size']):
+                        r = s['row'] + (0 if s['horizontal'] else i)
+                        c = s['col'] + (i if s['horizontal'] else 0)
+                        self.board[r][c] = 0
+                        # Снимаем подсветку с клетки
+                        cell = self.cells.get((r, c))
+                        if cell:
+                            cell.setStyleSheet("""
+                                QPushButton {
+                                    background-color: rgba(255, 255, 255, 30);
+                                    border: 1px solid rgba(255, 255, 255, 50);
+                                }
+                                QPushButton:hover {
+                                    background-color: rgba(255, 255, 255, 50);
+                                }
+                            """)
+                    self.placed_ships.remove(s)
+                    break
+            self.update_start_btn()
+            self.update_total_ships_counter()
+            self.clear_all_cells_highlight()
+        except Exception as e:
+            print(f"Error in remove_ship_from_board: {e}")
 
     def return_ship_to_panel(self, ship):
         """Возврат корабля на панель"""
-        self.remove_ship_from_board(ship)
-        ship.return_to_panel()
+        try:
+            # Удаляем корабль с поля
+            self.remove_ship_from_board(ship)
+            
+            # Возвращаем корабль на панель
+            ship.return_to_panel()
+            
+            # Обновляем счетчик
+            self.update_ship_count(ship.ship_size, 1)
+            
+            # Обновляем интерфейс
+            self.update_start_btn()
+            self.update()
+            
+        except Exception as e:
+            print(f"Error in return_ship_to_panel: {e}")
 
     def random_placement(self):
         """Случайная расстановка кораблей"""
@@ -710,7 +761,7 @@ class ShipPlacementScreen(QMainWindow):
             ship.deleteLater()
         self.placed_ships.clear()
         
-        # Очищаем поле
+        # Очищаем игровое поле
         self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]
         
         # Сбрасываем счетчики кораблей
@@ -759,52 +810,56 @@ class ShipPlacementScreen(QMainWindow):
         # Обновляем отображение
         self.update()
         self.update_start_btn()
+        
+    def clear_all_cells_highlight(self):
+        for cell in self.cells.values():
+            cell.setStyleSheet("""
+                QPushButton {
+                    background-color: rgba(255, 255, 255, 30);
+                    border: 1px solid rgba(255, 255, 255, 50);
+                }
+                QPushButton:hover {
+                    background-color: rgba(255, 255, 255, 50);
+                }
+            """)
 
     def clear_board(self):
         """Очистка поля"""
-        # Удаляем все существующие корабли
-        for ship_info in self.placed_ships[:]:
-            ship = ship_info['widget']
-            ship.deleteLater()
-        self.placed_ships.clear()
-        
-        # Очищаем игровое поле
-        self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]
-        
-        # Сбрасываем счетчики кораблей и обновляем панель
-        total_ships = sum(c for _, c in self.SHIPS_SET)
-        self.ships_counter.setText(f'Осталось: {total_ships} кораблей')
-        
-        for size, count in self.SHIPS_SET:
-            # Обновляем счетчик для каждого типа кораблей
-            self.available_ships[size]['count'] = count
-            self.available_ships[size]['label'].setText(f"x{count}")
-            self.available_ships[size]['template'].setVisible(True)
-            
-            # Сбрасываем состояние кораблей
-            for ship in self.available_ships[size]['widgets']:
-                ship.setVisible(False)
-                ship.setEnabled(True)
-                ship.is_placed = False
-                ship.is_horizontal = True
-                if ship.original_parent and ship.original_pos:
-                    ship.setParent(ship.original_parent)
-                    ship.move(ship.original_pos)
-        
-        # Обновляем интерфейс
-        self.update_start_btn()
-        self.status_label.setText('Перетащите корабли на поле')
-        self.update()
+        try:
+            # Сохраняем список виджетов для удаления
+            ships_to_delete = [ship_info['widget'] for ship_info in self.placed_ships]
+            for ship in ships_to_delete:
+                ship.deleteLater()
+            self.placed_ships.clear()
+            # Очищаем игровое поле
+            self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]
+            # Сбрасываем счетчики кораблей
+            for size, count in self.SHIPS_SET:
+                self.available_ships[size]['count'] = count
+                self.available_ships[size]['label'].setText(f"x{count}")
+                self.available_ships[size]['template'].setVisible(True)
+            # Обновляем счетчик
+            total_ships = sum(c for _, c in self.SHIPS_SET)
+            self.ships_counter.setText(f'Осталось: {total_ships} кораблей')
+            # Обновляем статус
+            self.status_label.setText('Перетащите корабли на поле')
+            # Сброс подсветки
+            self.clear_all_cells_highlight()
+            # Обновляем интерфейс
+            self.update_start_btn()
+            self.update_total_ships_counter()
+            self.update()
+        except Exception as e:
+            print(f"Error in clear_board: {e}")
 
     def start_game(self):
         if len(self.placed_ships) == sum(c for _, c in self.SHIPS_SET):
-            ships = [(s['row']+1, s['col']+1, s['widget'].ship_size, s['widget'].is_horizontal) 
-                    for s in self.placed_ships]
+            ships = [((s['row']+1, s['col']+1), s['widget'].ship_size, s['widget'].is_horizontal) for s in self.placed_ships]
             from game_screen import GameScreen
             self.game_screen = GameScreen(ships)
             self.game_screen.show()
             self.close()
-
+        
     def update_start_btn(self):
         total_ships = sum(c for _, c in self.SHIPS_SET)
         placed_ships = len(self.placed_ships)
@@ -827,12 +882,12 @@ class ShipPlacementScreen(QMainWindow):
                 self.setPalette(palette)
                 return
         self.setStyleSheet('QMainWindow {background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1a237e, stop:1 #0d47a1);} ')
-
+        
     def go_back(self):
         from main import MainMenu
         self.main_menu = MainMenu()
         self.main_menu.show()
-        self.close()
+        self.close() 
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -916,3 +971,146 @@ class ShipPlacementScreen(QMainWindow):
                             QPoint(cell_pos.x() + width // 2, cell_pos.y() + height),
                             QPoint(cell_pos.x() + width, cell_pos.y() + height - 5)
                         ]) 
+
+    def start_drag_ship(self, event, ship, from_field=False):
+        size = ship.ship_size
+        # Проверяем, есть ли корабли этого типа на панели
+        if not from_field:
+            if self.available_ships[size]['count'] <= 0:
+                return
+            # Уменьшаем счетчик только при начале drag&drop
+            self.available_ships[size]['count'] -= 1
+            if self.available_ships[size]['count'] < 0:
+                self.available_ships[size]['count'] = 0
+            self.available_ships[size]['label'].setText(f"x{self.available_ships[size]['count']}")
+            if self.available_ships[size]['count'] == 0:
+                self.available_ships[size]['template'].setVisible(False)
+        new_ship = ShipPreview(size, self, self)
+        new_ship.is_horizontal = ship.is_horizontal
+        new_ship.is_temp_dragged = True
+        new_ship.is_template = False
+        new_ship.is_placed = False
+        new_ship.from_panel = not from_field
+        new_ship.setFocus()
+        new_ship.setCursor(Qt.ClosedHandCursor)
+        if from_field:
+            # Удаляем с поля
+            self.remove_ship_from_board(ship)
+            ship.deleteLater()
+        # Позиция
+        global_pos = ship.mapToGlobal(event.pos())
+        new_ship.move(self.mapFromGlobal(global_pos))
+        new_ship.show()
+        new_ship.is_dragging = True
+        new_ship.drag_start_pos = event.pos()
+        self.dragged_ship = new_ship
+
+    def update_drag_highlight(self, ship):
+        # Подсветка клеток под временным кораблем
+        game_board = self.findChild(QWidget, "game_board")
+        if not game_board:
+            return
+        center_pos = ship.mapTo(game_board, ship.rect().center())
+        target_cell = None
+        target_pos = None
+        min_distance = float('inf')
+        for pos, cell in self.cells.items():
+            cell_center = cell.rect().center()
+            cell_center_global = cell.mapTo(game_board, cell_center)
+            distance = (center_pos - cell_center_global).manhattanLength()
+            if distance < min_distance:
+                min_distance = distance
+                target_cell = cell
+                target_pos = pos
+        if target_cell:
+            can_place = self.can_place_ship(target_pos[0], target_pos[1], ship.ship_size, ship.is_horizontal)
+            ship.highlight_ship_cells(target_pos[0], target_pos[1], can_place)
+            ship.is_valid_placement = can_place
+            ship.is_invalid_position = not can_place
+            ship.update()
+        else:
+            ship.highlight_ship_cells(-1, -1, False)
+            ship.is_valid_placement = True
+            ship.is_invalid_position = False
+            ship.update()
+
+    def try_place_dragged_ship(self, ship, row, col):
+        if self.can_place_ship(row, col, ship.ship_size, ship.is_horizontal):
+            # Создаём новый постоянный экземпляр для поля
+            placed_ship = ShipPreview(ship.ship_size, self, self)
+            placed_ship.is_horizontal = ship.is_horizontal
+            placed_ship.is_placed = True
+            placed_ship.is_template = False
+            placed_ship.setFocus()
+            placed_ship.setCursor(Qt.OpenHandCursor)
+            # Размеры и позиция
+            if ship.is_horizontal:
+                placed_ship.setFixedSize(ship.ship_size * self.field_cell_size, self.field_cell_size)
+            else:
+                placed_ship.setFixedSize(self.field_cell_size, ship.ship_size * self.field_cell_size)
+            first_cell = self.cells[(row, col)]
+            cell_pos = first_cell.mapTo(self, QPoint(0, 0))
+            placed_ship.move(cell_pos)
+            placed_ship.show()
+            # Добавляем в placed_ships
+            self.placed_ships.append({
+                'row': row,
+                'col': col,
+                'horizontal': ship.is_horizontal,
+                'size': ship.ship_size,
+                'widget': placed_ship
+            })
+            # Обновляем board
+            for i in range(ship.ship_size):
+                r = row + (0 if ship.is_horizontal else i)
+                c = col + (i if ship.is_horizontal else 0)
+                self.board[r][c] = 1
+            # Удаляем временный drag-ship
+            ship.deleteLater()
+            self.clear_all_cells_highlight()
+            self.update()
+            self.update_start_btn()
+            self.update_total_ships_counter()
+            return True
+        else:
+            # Если не удалось разместить — вернуть счетчик, если drag был с панели
+            if hasattr(ship, 'from_panel') and ship.from_panel:
+                self.available_ships[ship.ship_size]['count'] += 1
+                self.available_ships[ship.ship_size]['label'].setText(f"x{self.available_ships[ship.ship_size]['count']}")
+                self.available_ships[ship.ship_size]['template'].setVisible(True)
+                self.update_total_ships_counter()
+            self.clear_all_cells_highlight()
+            return False
+
+    def snap_dragged_ship(self, ship):
+        # После поворота корабль прилипает к ближайшей клетке
+        game_board = self.findChild(QWidget, "game_board")
+        if not game_board:
+            return
+        # Используем центр корабля
+        global_mouse = ship.mapToGlobal(ship.rect().center())
+        board_mouse = game_board.mapFromGlobal(global_mouse)
+        min_dist = float('inf')
+        snap_pos = None
+        for (row, col), cell in self.cells.items():
+            cell_center = cell.rect().center()
+            cell_center_global = cell.mapTo(game_board, cell_center)
+            dist = (board_mouse - cell_center_global).manhattanLength()
+            if dist < min_dist:
+                min_dist = dist
+                snap_pos = (row, col, cell)
+        if snap_pos:
+            row, col, cell = snap_pos
+            cell_pos = cell.mapTo(self, QPoint(0, 0))
+            ship.move(cell_pos)
+            can_place = self.can_place_ship(row, col, ship.ship_size, ship.is_horizontal)
+            ship.highlight_ship_cells(row, col, can_place)
+            ship.is_valid_placement = can_place
+            ship.is_invalid_position = not can_place
+            ship.update()
+            ship._snap_row = row
+            ship._snap_col = col 
+
+    def update_total_ships_counter(self):
+        total_left = sum(info['count'] for info in self.available_ships.values())
+        self.ships_counter.setText(f'Осталось: {total_left} кораблей') 
