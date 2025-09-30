@@ -1,62 +1,127 @@
+"""
+Модуль игрового экрана игры "Морской бой"
+
+Этот модуль содержит:
+- Основной игровой интерфейс с двумя полями (игрок и компьютер)
+- Логику игры и обработку выстрелов
+- Искусственный интеллект для компьютера
+- Отслеживание статистики игры
+- Переходы к экрану результатов
+
+Автор: [Ваше имя]
+Версия: 1.0
+"""
+
+# Импорт необходимых модулей для работы с GUI
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLabel, QGridLayout, QMessageBox)
-from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QPixmap, QPalette, QBrush
-import os
-import random
-from datetime import datetime
-import sys
+from PyQt5.QtCore import Qt, QSize, QTimer  # Для таймеров и констант Qt
+from PyQt5.QtGui import QPixmap, QPalette, QBrush  # Для работы с изображениями
+import os  # Для работы с файловой системой
+import random  # Для генерации случайных чисел (ИИ компьютера)
+from datetime import datetime  # Для отслеживания времени игры
+import sys  # Для работы с системными параметрами
 
 def resource_path(relative_path):
+    """
+    Функция для корректного определения пути к ресурсам при упаковке в исполняемый файл
+    
+    Args:
+        relative_path (str): Относительный путь к файлу ресурса
+        
+    Returns:
+        str: Абсолютный путь к файлу ресурса
+        
+    Примечание:
+        При упаковке с помощью PyInstaller ресурсы упаковываются в временную папку,
+        доступную через sys._MEIPASS. Эта функция проверяет, запущено ли приложение
+        из упакованного exe файла или из исходного кода.
+    """
     if hasattr(sys, '_MEIPASS'):
+        # Если приложение упаковано в exe, используем временную папку PyInstaller
         return os.path.join(sys._MEIPASS, relative_path)
+    # Иначе используем текущую рабочую директорию
     return os.path.join(os.path.abspath('.'), relative_path)
 
 class GameScreen(QMainWindow):
+    """
+    Класс игрового экрана игры "Морской бой"
+    
+    Наследуется от QMainWindow и предоставляет:
+    - Два игровых поля (игрок и компьютер)
+    - Логику обработки выстрелов
+    - Искусственный интеллект для компьютера
+    - Отслеживание статистики игры
+    - Переходы к экрану результатов
+    """
+    
     def __init__(self, player_ships):
-        super().__init__()
-        # Инициализация экрана игры
-        self.player_ships = player_ships
-        self.player_board = [[0 for _ in range(10)] for _ in range(10)]
-        self.computer_board = [[0 for _ in range(10)] for _ in range(10)]
-        self.computer_ships = []
-        self.player_turn = True
-        self.game_stats = {
-            'shots': 0,
-            'hits': 0,
-            'start_time': datetime.now(),
-            'player_ships_destroyed': 0,
-            'computer_ships_destroyed': 0
-        }
-        # Переменные для ИИ
-        self.last_hit = None
-        self.hunting_mode = False
-        self.hit_direction = None
-        self.possible_targets = []
-        # Таймер для задержки выстрела ИИ
-        self.shot_timer = QTimer()
-        self.shot_timer.setSingleShot(True)
-        self.shot_timer.timeout.connect(self.make_computer_shot)
+        """
+        Конструктор игрового экрана
         
-        self.initUI()
-        self.place_computer_ships()
-        self.place_player_ships()
+        Args:
+            player_ships (list): Список кораблей игрока в формате [(row, col, size, is_horizontal), ...]
+        """
+        super().__init__()  # Вызов конструктора родительского класса
+        
+        # Инициализация данных игры
+        self.player_ships = player_ships  # Корабли игрока, переданные с экрана расстановки
+        self.player_board = [[0 for _ in range(10)] for _ in range(10)]  # Игровое поле игрока (10x10)
+        self.computer_board = [[0 for _ in range(10)] for _ in range(10)]  # Игровое поле компьютера (10x10)
+        self.computer_ships = []  # Список кораблей компьютера
+        self.player_turn = True  # Флаг, чей сейчас ход (True - игрок, False - компьютер)
+        
+        # Статистика игры
+        self.game_stats = {
+            'shots': 0,  # Общее количество выстрелов
+            'hits': 0,  # Количество попаданий
+            'start_time': datetime.now(),  # Время начала игры
+            'player_ships_destroyed': 0,  # Количество уничтоженных кораблей игрока
+            'computer_ships_destroyed': 0  # Количество уничтоженных кораблей компьютера
+        }
+        
+        # Переменные для искусственного интеллекта компьютера
+        self.last_hit = None  # Последняя клетка, в которую попал компьютер
+        self.hunting_mode = False  # Режим "охоты" - когда компьютер ищет остальную часть корабля
+        self.hit_direction = None  # Направление, в котором компьютер продолжает стрелять
+        self.possible_targets = []  # Список возможных целей для компьютера
+        
+        # Таймер для задержки выстрела ИИ (создает эффект "размышления")
+        self.shot_timer = QTimer()
+        self.shot_timer.setSingleShot(True)  # Таймер срабатывает только один раз
+        self.shot_timer.timeout.connect(self.make_computer_shot)  # Подключение обработчика выстрела ИИ
+        
+        # Инициализация интерфейса и размещение кораблей
+        self.initUI()  # Создание пользовательского интерфейса
+        self.place_computer_ships()  # Размещение кораблей компьютера
+        self.place_player_ships()  # Размещение кораблей игрока
         
     def initUI(self):
-        """Создание и настройка экрана игры"""
-        self.setWindowTitle('Морской бой - Игра')
-        self.setFixedSize(1200, 700)
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
+        """
+        Создание и настройка пользовательского интерфейса игрового экрана
+        
+        Создает:
+        - Два игровых поля (игрок и компьютер)
+        - Подписи для полей и координат
+        - Кнопки управления
+        - Фоновое изображение
+        """
+        # Настройка основных свойств окна
+        self.setWindowTitle('Морской бой - Игра')  # Заголовок окна
+        self.setFixedSize(1200, 700)  # Фиксированный размер окна
+        
+        # Создание центрального виджета
+        central_widget = QWidget()  # Центральный контейнер
+        self.setCentralWidget(central_widget)  # Установка центрального виджета
 
-        # Внешний вертикальный layout
-        outer_layout = QVBoxLayout(central_widget)
-        outer_layout.setContentsMargins(20, 20, 20, 20)
-        outer_layout.setSpacing(0)
+        # Создание основного вертикального макета
+        outer_layout = QVBoxLayout(central_widget)  # Внешний вертикальный макет
+        outer_layout.setContentsMargins(20, 20, 20, 20)  # Отступы от краев
+        outer_layout.setSpacing(0)  # Расстояние между элементами
 
-        # Горизонтальный layout для игровых полей
-        main_layout = QHBoxLayout()
-        main_layout.setAlignment(Qt.AlignCenter)
+        # Создание горизонтального макета для игровых полей
+        main_layout = QHBoxLayout()  # Горизонтальный макет для размещения полей рядом
+        main_layout.setAlignment(Qt.AlignCenter)  # Выравнивание по центру
 
         # --- Игровые доски ---
         player_board_widget = QWidget()
@@ -77,11 +142,11 @@ class GameScreen(QMainWindow):
         """)
         player_layout.addWidget(player_title)
         
-        # Create player's grid
+        # Создайте сетку игроков
         player_grid = QGridLayout()
         player_grid.setSpacing(1)
         
-        # Add column labels (A-K)
+        # Добавить метки столбцов (A-K)
         for i, letter in enumerate('АБВГДЕЖЗИК'):
             label = QLabel(letter)
             label.setAlignment(Qt.AlignCenter)
@@ -96,7 +161,7 @@ class GameScreen(QMainWindow):
             """)
             player_grid.addWidget(label, 0, i + 1)
         
-        # Add row labels (1-10)
+        # Добавить метки строк (1-10)
         for i in range(1, 11):
             label = QLabel(str(i))
             label.setAlignment(Qt.AlignCenter)
@@ -111,7 +176,7 @@ class GameScreen(QMainWindow):
             """)
             player_grid.addWidget(label, i, 0)
         
-        # Create player's cells
+        # Создавайте ячейки для игроков
         self.player_cells = {}
         for row in range(1, 11):
             for col in range(1, 11):
@@ -131,11 +196,11 @@ class GameScreen(QMainWindow):
         
         player_layout.addLayout(player_grid)
         
-        # Create computer's board
+        # Создайте плату компьютера
         computer_board_widget = QWidget()
         computer_layout = QVBoxLayout(computer_board_widget)
         
-        # Add computer's board title
+        # Добавить название игрового поля компьютера
         computer_title = QLabel("Поле противника")
         computer_title.setAlignment(Qt.AlignCenter)
         computer_title.setStyleSheet("""
@@ -149,11 +214,11 @@ class GameScreen(QMainWindow):
         """)
         computer_layout.addWidget(computer_title)
         
-        # Create computer's grid
+        # Создайте сетку компьютера
         computer_grid = QGridLayout()
         computer_grid.setSpacing(1)
         
-        # Add column labels (A-K)
+        # Добавить метки столбцов (A-K)
         for i, letter in enumerate('АБВГДЕЖЗИК'):
             label = QLabel(letter)
             label.setAlignment(Qt.AlignCenter)
@@ -168,7 +233,7 @@ class GameScreen(QMainWindow):
             """)
             computer_grid.addWidget(label, 0, i + 1)
         
-        # Add row labels (1-10)
+        # Добавить метки строк (1-10)
         for i in range(1, 11):
             label = QLabel(str(i))
             label.setAlignment(Qt.AlignCenter)
@@ -183,7 +248,7 @@ class GameScreen(QMainWindow):
             """)
             computer_grid.addWidget(label, i, 0)
         
-        # Create computer's cells
+        # Создайте ячейки компьютера
         self.computer_cells = {}
         for row in range(1, 11):
             for col in range(1, 11):
@@ -235,34 +300,53 @@ class GameScreen(QMainWindow):
         self.set_background()
         
     def place_computer_ships(self):
-        """Размещение кораблей компьютера на скрытом поле"""
-        ships = [(4, 1), (3, 2), (2, 3), (1, 4)]
+        """
+        Размещение кораблей компьютера на скрытом поле
+        
+        Автоматически размещает корабли компьютера согласно правилам:
+        - 1 корабль на 4 клетки
+        - 2 корабля на 3 клетки  
+        - 3 корабля на 2 клетки
+        - 4 корабля на 1 клетку
+        
+        Корабли размещаются случайным образом с соблюдением правил:
+        - Не соприкасаются друг с другом
+        - Не выходят за границы поля
+        """
+        # Определение количества кораблей каждого размера
+        ships = [(4, 1), (3, 2), (2, 3), (1, 4)]  # (размер, количество)
+        
+        # Размещение кораблей каждого типа
         for size, count in ships:
-            for _ in range(count):
-                while True:
-                    row = random.randint(0, 9)
-                    col = random.randint(0, 9)
-                    is_horizontal = random.choice([True, False])
+            for _ in range(count):  # Для каждого корабля данного размера
+                while True:  # Бесконечный цикл до успешного размещения
+                    # Генерация случайной позиции и ориентации
+                    row = random.randint(0, 9)  # Случайная строка (0-9)
+                    col = random.randint(0, 9)  # Случайный столбец (0-9)
+                    is_horizontal = random.choice([True, False])  # Случайная ориентация
                     
+                    # Проверка возможности размещения корабля
                     if self.can_place_ship(self.computer_board, row, col, size, is_horizontal):
-                        # Размещаем корабль на доске, но не отображаем его визуально
-                        if is_horizontal:
+                        # Размещение корабля на игровом поле (но не отображаем визуально)
+                        if is_horizontal:  # Горизонтальное размещение
                             for i in range(size):
-                                self.computer_board[row][col + i] = 1
-                        else:
+                                self.computer_board[row][col + i] = 1  # Отметка клеток корабля
+                        else:  # Вертикальное размещение
                             for i in range(size):
-                                self.computer_board[row + i][col] = 1
+                                self.computer_board[row + i][col] = 1  # Отметка клеток корабля
+                        
+                        # Сохранение информации о корабле
                         self.computer_ships.append((row, col, size, is_horizontal))
-                        break
+                        break  # Выход из цикла при успешном размещении
     
     def place_player_ships(self):
         """Размещение кораблей игрока на видимом поле"""
         for start_pos, size, is_horizontal in self.player_ships:
             row, col = start_pos
-            row -= 1  # Convert to 0-based indexing
+            row -= 1  # Преобразование в индексацию на основе 0
             col -= 1
             self.place_ship(self.player_board, row, col, size, is_horizontal)
-            # Show ship on player's board
+            # Отобразить корабль на поле игрока
             for i in range(size):
                 if is_horizontal:
                     pos = (row + 1, col + i + 1)
@@ -293,7 +377,7 @@ class GameScreen(QMainWindow):
     
     def is_valid_placement(self, board, row, col):
         """Проверка валидности клетки для размещения корабля"""
-        # Check if the cell and its surroundings are empty
+        # Проверка, пуста ли клетка и ее окружение
         for r in range(max(0, row - 1), min(10, row + 2)):
             for c in range(max(0, col - 1), min(10, col + 2)):
                 if board[r][c] != 0:
@@ -328,59 +412,80 @@ class GameScreen(QMainWindow):
                     """)
     
     def make_shot(self, row, col):
-        """Обработка выстрела игрока по полю противника"""
-        if not self.player_turn:
-            return
+        """
+        Обработка выстрела игрока по полю противника
+        
+        Args:
+            row (int): Номер строки (1-10)
+            col (int): Номер столбца (1-10)
             
-        # Convert to 0-based indexing
+        Логика:
+        1. Проверяет, ход ли игрока
+        2. Проверяет, не стрелял ли уже в эту клетку
+        3. Обрабатывает попадание или промах
+        4. Обновляет статистику
+        5. Проверяет условия победы
+        6. Передает ход компьютеру при промахе
+        """
+        # Проверка, что сейчас ход игрока
+        if not self.player_turn:
+            return  # Игнорируем выстрел, если не ход игрока
+            
+        # Преобразование координат из пользовательских (1-10) в программные (0-9)
         row -= 1
         col -= 1
         
-        # Check if the cell was already shot
-        if self.computer_board[row][col] in [2, 3]:  # 2 for miss, 3 for hit
-            return
+        # Проверка, не стрелял ли уже в эту клетку
+        if self.computer_board[row][col] in [2, 3]:  # 2 = промах, 3 = попадание
+            return  # Игнорируем повторный выстрел в ту же клетку
             
-        # Update shots count
+        # Обновление статистики - увеличение счетчика выстрелов
         self.game_stats['shots'] += 1
             
-        # Make the shot
-        if self.computer_board[row][col] == 1:  # Hit
-            self.computer_board[row][col] = 3
+        # Обработка результата выстрела
+        if self.computer_board[row][col] == 1:  # Попадание в корабль
+            self.computer_board[row][col] = 3  # Отметка клетки как "попадание"
+            
+            # Визуальное отображение попадания (красная клетка)
             self.computer_cells[(row + 1, col + 1)].setStyleSheet("""
                 QPushButton {
-                    background-color: #f44336;
-                    border: 1px solid #d32f2f;
+                    background-color: #f44336;  /* Красный фон */
+                    border: 1px solid #d32f2f;  /* Темно-красная рамка */
                 }
             """)
             
-            # Увеличиваем счетчик попаданий
+            # Увеличение счетчика попаданий
             self.game_stats['hits'] += 1
             
-            # Check if ship is destroyed
+            # Проверка, полностью ли уничтожен корабль
             if self.is_ship_destroyed(self.computer_board, row, col):
-                self.game_stats['computer_ships_destroyed'] += 1
-                self.mark_surrounding_cells(row, col)
+                self.game_stats['computer_ships_destroyed'] += 1  # Увеличение счетчика уничтоженных кораблей
+                self.mark_surrounding_cells(row, col)  # Отметка клеток вокруг уничтоженного корабля
                 
-            # Check if all ships are destroyed
+            # Проверка условия победы игрока
             if self.check_winner(self.computer_board):
-                self.show_result(True)
+                self.show_result(True)  # Показ экрана победы
                 return
-        else:  # Miss
-            self.computer_board[row][col] = 2
+        else:  # Промах
+            self.computer_board[row][col] = 2  # Отметка клетки как "промах"
+            
+            # Визуальное отображение промаха (белая клетка)
             self.computer_cells[(row + 1, col + 1)].setStyleSheet("""
                 QPushButton {
-                    background-color: white;
-                    border: 1px solid #bdbdbd;
+                    background-color: white;  /* Белый фон */
+                    border: 1px solid #bdbdbd;  /* Серая рамка */
                 }
             """)
+            
+            # Передача хода компьютеру
             self.player_turn = False
-            self.computer_turn()
+            self.computer_turn()  # Запуск хода компьютера
     
     def is_ship_destroyed(self, board, row, col):
         """Проверка, уничтожен ли корабль полностью"""
-        # Find the ship's cells
+        # Найти клетки корабля
         ship_cells = []
-        # Check horizontal
+        # Проверка горизонтали
         c = col
         while c >= 0 and board[row][c] in [1, 3]:
             ship_cells.append((row, c))
@@ -389,7 +494,7 @@ class GameScreen(QMainWindow):
         while c < 10 and board[row][c] in [1, 3]:
             ship_cells.append((row, c))
             c += 1
-        # Check vertical
+        # Проверка вертикали
         r = row
         while r >= 0 and board[r][col] in [1, 3]:
             ship_cells.append((r, col))
@@ -399,14 +504,14 @@ class GameScreen(QMainWindow):
             ship_cells.append((r, col))
             r += 1
             
-        # Check if all cells are hit
+        # Проверка, все ли клетки уничтожены
         return all(board[r][c] == 3 for r, c in ship_cells)
     
     def mark_surrounding_cells(self, row, col):
         """Отметить клетки вокруг уничтоженного корабля"""
-        # Find the ship's cells
+        # Найти клетки корабля
         ship_cells = []
-        # Check horizontal
+        # Проверка горизонтали
         c = col
         while c >= 0 and self.computer_board[row][c] in [1, 3]:
             ship_cells.append((row, c))
@@ -415,7 +520,7 @@ class GameScreen(QMainWindow):
         while c < 10 and self.computer_board[row][c] in [1, 3]:
             ship_cells.append((row, c))
             c += 1
-        # Check vertical
+        # Проверка вертикали
         r = row
         while r >= 0 and self.computer_board[r][col] in [1, 3]:
             ship_cells.append((r, col))
@@ -425,7 +530,7 @@ class GameScreen(QMainWindow):
             ship_cells.append((r, col))
             r += 1
             
-        # Mark surrounding cells
+        # Отметить окружающие клетки
         for r, c in ship_cells:
             for dr in [-1, 0, 1]:
                 for dc in [-1, 0, 1]:
@@ -441,18 +546,18 @@ class GameScreen(QMainWindow):
     
     def computer_turn(self):
         """Запуск таймера для выстрела ИИ"""
-        # Start the timer for delayed shot
-        self.shot_timer.start(500)  # 0.5 second delay
+        # Запуск таймера для задержанного выстрела
+        self.shot_timer.start(500)  # 0.5 секунда задержки
     
     def make_computer_shot(self):
         """Логика выстрела ИИ"""
-        if not self.player_turn:  # Additional check to prevent multiple shots
+        if not self.player_turn:  # Дополнительная проверка для предотвращения множественных выстрелов
             if self.hunting_mode:
-                # If we have a hit, try to find the rest of the ship
+                # Если есть попадание, попробуйте найти остальную часть корабля
                 if self.last_hit:
                     row, col = self.last_hit
                     if self.hit_direction is None:
-                        # Try all four directions
+                        # Попробуйте все четыре направления
                         directions = [(0, 1), (1, 0), (0, -1), (-1, 0)]
                         random.shuffle(directions)
                         for dr, dc in directions:
@@ -463,7 +568,7 @@ class GameScreen(QMainWindow):
                                 self.fire_shot(new_row, new_col)
                                 return
                     else:
-                        # Continue in the same direction
+                        # Продолжайте в том же направлении
                         dr, dc = self.hit_direction
                         new_row, new_col = row + dr, col + dc
                         if (0 <= new_row < 10 and 0 <= new_col < 10 and 
@@ -471,7 +576,7 @@ class GameScreen(QMainWindow):
                             self.fire_shot(new_row, new_col)
                             return
                         else:
-                            # If we hit the edge or a miss, try the opposite direction
+                            # Если мы попали в край или промах, попробуйте противоположное направление
                             dr, dc = -dr, -dc
                             new_row, new_col = self.last_hit[0] + dr, self.last_hit[1] + dc
                             if (0 <= new_row < 10 and 0 <= new_col < 10 and 
@@ -480,29 +585,29 @@ class GameScreen(QMainWindow):
                                 self.fire_shot(new_row, new_col)
                                 return
                             else:
-                                # If both directions are blocked, reset hunting mode
+                                # Если оба направления заблокированы, сбросьте режим охоты
                                 self.hunting_mode = False
                                 self.last_hit = None
                                 self.hit_direction = None
             
-            # If not in hunting mode, use probability targeting
+            # Если не в режиме охоты, используйте вероятностное прицеливание
             if not self.hunting_mode:
-                # Create probability map
+                # Создайте карту вероятностей
                 probability_map = [[0 for _ in range(10)] for _ in range(10)]
                 
-                # Mark already shot cells as -1
+                # Отметить уже выстреленные клетки как -1
                 for r in range(10):
                     for c in range(10):
                         if self.player_board[r][c] in [2, 3]:
                             probability_map[r][c] = -1
                 
-                # Calculate probabilities based on ship placement rules
+                # Рассчитайте вероятности на основе правил размещения кораблей
                 for r in range(10):
                     for c in range(10):
                         if probability_map[r][c] != -1:
-                            # Check horizontal and vertical possibilities
-                            for size in range(1, 5):  # Ship sizes from 1 to 4
-                                # Horizontal
+                            # Проверка горизонтальных и вертикальных возможностей
+                            for size in range(1, 5):  # Размеры кораблей от 1 до 4
+                                # Горизонталь
                                 if c + size <= 10:
                                     valid = True
                                     for i in range(size):
@@ -513,7 +618,7 @@ class GameScreen(QMainWindow):
                                         for i in range(size):
                                             probability_map[r][c + i] += 1
                                 
-                                # Vertical
+                                # Вертикаль
                                 if r + size <= 10:
                                     valid = True
                                     for i in range(size):
@@ -524,7 +629,7 @@ class GameScreen(QMainWindow):
                                         for i in range(size):
                                             probability_map[r + i][c] += 1
                 
-                # Find cells with highest probability
+                # Найти клетки с наивысшей вероятностью
                 max_prob = 0
                 best_cells = []
                 for r in range(10):
@@ -540,7 +645,7 @@ class GameScreen(QMainWindow):
                     self.fire_shot(row, col)
                     return
             
-            # If all else fails, make a random shot
+            # Если все остальное не удается, сделайте случайный выстрел
             while True:
                 row = random.randint(0, 9)
                 col = random.randint(0, 9)
@@ -559,28 +664,28 @@ class GameScreen(QMainWindow):
                 }
             """)
             
-            # Update AI targeting
+            # Обновление целей ИИ
             self.hunting_mode = True
             self.last_hit = (row, col)
             
-            # Check if ship is destroyed
+            # Проверка, уничтожен ли корабль
             if self.is_ship_destroyed(self.player_board, row, col):
                 self.game_stats['player_ships_destroyed'] += 1
                 self.mark_surrounding_cells_player(row, col)
-                # Reset hunting mode when ship is destroyed
+                # Сбросьте режим охоты, когда корабль уничтожен
                 self.hunting_mode = False
                 self.last_hit = None
                 self.hit_direction = None
                 
-            # Check if all ships are destroyed
+            # Проверка, уничтожены ли все корабли
             if self.check_winner(self.player_board):
                 self.show_result(False)
                 return
                 
-            # Continue AI turn after hit
+            # Продолжайте ход ИИ после попадания
             self.computer_turn()
             
-        else:  # Miss
+        else:  # Промах
             self.player_board[row][col] = 2
             self.player_cells[(row + 1, col + 1)].setStyleSheet("""
                 QPushButton {
@@ -588,17 +693,17 @@ class GameScreen(QMainWindow):
                     border: 1px solid #bdbdbd;
                 }
             """)
-            # If we're in hunting mode and missed, try another direction
+            # Если мы в режиме охоты и промахнулись, попробуйте другое направление
             if self.hunting_mode:
                 self.hit_direction = None
-            # Give turn to player only after miss
+            # Давайте ход игроку только после промаха
             self.player_turn = True
     
     def mark_surrounding_cells_player(self, row, col):
         """Отметить клетки вокруг уничтоженного корабля игрока"""
-        # Find the ship's cells
+        # Найти клетки корабля
         ship_cells = []
-        # Check horizontal
+        # Проверка горизонтали
         c = col
         while c >= 0 and self.player_board[row][c] in [1, 3]:
             ship_cells.append((row, c))
@@ -607,7 +712,7 @@ class GameScreen(QMainWindow):
         while c < 10 and self.player_board[row][c] in [1, 3]:
             ship_cells.append((row, c))
             c += 1
-        # Check vertical
+        # Проверка вертикали
         r = row
         while r >= 0 and self.player_board[r][col] in [1, 3]:
             ship_cells.append((r, col))
@@ -617,7 +722,7 @@ class GameScreen(QMainWindow):
             ship_cells.append((r, col))
             r += 1
             
-        # Mark surrounding cells
+        # Отметить окружающие клетки
         for r, c in ship_cells:
             for dr in [-1, 0, 1]:
                 for dc in [-1, 0, 1]:
@@ -657,7 +762,7 @@ class GameScreen(QMainWindow):
         except Exception as e:
             print(f"Error loading background: {e}")
         
-        # If background loading fails, set default gradient background
+        # Если загрузка фонового изображения не удалась, установите градиентный фон по умолчанию
         self.setStyleSheet("""
             QMainWindow {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,

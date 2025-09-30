@@ -1,52 +1,116 @@
+"""
+Модуль экрана расстановки кораблей игры "Морской бой"
+
+Этот модуль содержит:
+- Интерфейс для расстановки кораблей игроком
+- Drag & Drop функциональность для перетаскивания кораблей
+- Визуализацию кораблей с детализированной графикой
+- Валидацию размещения кораблей согласно правилам
+- Автоматическую расстановку кораблей
+- Переходы к игровому экрану
+
+Автор: [Ваше имя]
+Версия: 1.0
+"""
+
+# Импорт необходимых модулей для работы с GUI
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QPushButton, QLabel, QGridLayout, QMessageBox,
                            QFrame, QSizePolicy)
-from PyQt5.QtCore import Qt, QSize, QPoint, QRect, QMimeData
-from PyQt5.QtGui import QPixmap, QPalette, QBrush, QColor, QPainter, QPen, QCursor, QFont, QDrag
-import os
-import random
-from PyQt5.QtWidgets import QApplication
-import sys
+from PyQt5.QtCore import Qt, QSize, QPoint, QRect, QMimeData  # Для работы с координатами и данными
+from PyQt5.QtGui import (QPixmap, QPalette, QBrush, QColor, QPainter, QPen, 
+                        QCursor, QFont, QDrag)  # Для работы с графикой и перетаскиванием
+import os  # Для работы с файловой системой
+import random  # Для случайной расстановки кораблей
+from PyQt5.QtWidgets import QApplication  # Для работы с приложением
+import sys  # Для работы с системными параметрами
 
 def resource_path(relative_path):
+    """
+    Функция для корректного определения пути к ресурсам при упаковке в исполняемый файл
+    
+    Args:
+        relative_path (str): Относительный путь к файлу ресурса
+        
+    Returns:
+        str: Абсолютный путь к файлу ресурса
+        
+    Примечание:
+        При упаковке с помощью PyInstaller ресурсы упаковываются в временную папку,
+        доступную через sys._MEIPASS. Эта функция проверяет, запущено ли приложение
+        из упакованного exe файла или из исходного кода.
+    """
     if hasattr(sys, '_MEIPASS'):
+        # Если приложение упаковано в exe, используем временную папку PyInstaller
         return os.path.join(sys._MEIPASS, relative_path)
+    # Иначе используем текущую рабочую директорию
     return os.path.join(os.path.abspath('.'), relative_path)
 
 class ShipPreview(QWidget):
+    """
+    Класс для отображения и управления кораблями на экране расстановки
+    
+    Предоставляет:
+    - Визуализацию кораблей с детализированной графикой
+    - Drag & Drop функциональность
+    - Поворот кораблей
+    - Валидацию размещения
+    - Интерактивную подсветку клеток
+    """
+    
     def __init__(self, size, parent=None, placement_screen=None):
-        super().__init__(parent)
-        self.ship_size = size
-        self.is_horizontal = True
-        self.setFixedSize(size * 25, 25)
+        """
+        Конструктор виджета корабля
+        
+        Args:
+            size (int): Размер корабля (количество клеток)
+            parent (QWidget): Родительский виджет
+            placement_screen (ShipPlacementScreen): Ссылка на экран расстановки
+        """
+        super().__init__(parent)  # Вызов конструктора родительского класса
+        
+        # Основные свойства корабля
+        self.ship_size = size  # Размер корабля в клетках
+        self.is_horizontal = True  # Ориентация корабля (True - горизонтально, False - вертикально)
+        
+        # Настройка размеров и стилей
+        self.setFixedSize(size * 25, 25)  # Установка размера виджета
         self.setStyleSheet("""
             QWidget {
-                background-color: transparent;
-                border: none;
+                background-color: transparent;  /* Прозрачный фон */
+                border: none;  /* Без рамки */
             }
         """)
-        self.setMouseTracking(True)
-        self.is_dragging = False
-        self.drag_start_pos = None
-        self.original_pos = None
-        self.original_parent = None
-        self.is_valid_placement = True
-        self.setCursor(Qt.OpenHandCursor)
-        self.is_placed = False
-        self.current_cells = []
-        self.is_invalid_position = False
-        self.field_cell_size = 40
-        self.placement_screen = placement_screen
-        self.current_row = -1
-        self.current_col = -1
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_NoSystemBackground)
-        self.setAttribute(Qt.WA_OpaquePaintEvent)
-        self.setFocusPolicy(Qt.StrongFocus)
-        self._drag_start_pos = None
-        self._drag_initiated = False
-        self.is_template = True  # Для шаблонных кораблей на панели
-        self.is_temp_dragged = False  # True для временного экземпляра
+        
+        # Настройка взаимодействия с мышью
+        self.setMouseTracking(True)  # Отслеживание движения мыши
+        self.is_dragging = False  # Флаг перетаскивания
+        self.drag_start_pos = None  # Начальная позиция перетаскивания
+        self.original_pos = None  # Исходная позиция корабля
+        self.original_parent = None  # Исходный родительский виджет
+        self.is_valid_placement = True  # Валидность текущего размещения
+        self.setCursor(Qt.OpenHandCursor)  # Курсор "открытая рука"
+        
+        # Состояние корабля
+        self.is_placed = False  # Размещен ли корабль на поле
+        self.current_cells = []  # Список подсвеченных клеток
+        self.is_invalid_position = False  # Находится ли в недопустимой позиции
+        self.field_cell_size = 40  # Размер клетки на игровом поле
+        self.placement_screen = placement_screen  # Ссылка на экран расстановки
+        self.current_row = -1  # Текущая строка размещения
+        self.current_col = -1  # Текущий столбец размещения
+        
+        # Настройка атрибутов виджета для корректного отображения
+        self.setAttribute(Qt.WA_TranslucentBackground)  # Прозрачный фон
+        self.setAttribute(Qt.WA_NoSystemBackground)  # Отключение системного фона
+        self.setAttribute(Qt.WA_OpaquePaintEvent)  # Оптимизация отрисовки
+        self.setFocusPolicy(Qt.StrongFocus)  # Возможность получения фокуса
+        
+        # Переменные для drag & drop
+        self._drag_start_pos = None  # Позиция начала перетаскивания
+        self._drag_initiated = False  # Инициировано ли перетаскивание
+        self.is_template = True  # Является ли шаблонным кораблем на панели
+        self.is_temp_dragged = False  # Является ли временным экземпляром при перетаскивании
         
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -311,21 +375,47 @@ class ShipPreview(QWidget):
                     self.placement_screen.snap_dragged_ship(self)
 
 class ShipPlacementScreen(QMainWindow):
-    FIELD_SIZE = 10
-    SHIPS_SET = [(4, 1), (3, 2), (2, 3), (1, 4)]  # (размер, количество)
-    field_cell_size = 40  # Размер клетки на поле
+    """
+    Класс экрана расстановки кораблей
+    
+    Предоставляет:
+    - Интерфейс для размещения кораблей игроком
+    - Drag & Drop функциональность
+    - Валидацию размещения согласно правилам игры
+    - Автоматическую расстановку кораблей
+    - Переход к игровому экрану
+    """
+    
+    # Константы класса
+    FIELD_SIZE = 10  # Размер игрового поля (10x10)
+    SHIPS_SET = [(4, 1), (3, 2), (2, 3), (1, 4)]  # (размер, количество) кораблей
+    field_cell_size = 40  # Размер клетки на игровом поле в пикселях
 
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle('Расстановка кораблей')
-        self.setFixedSize(1000, 700)
-        self.placed_ships = []
-        self.available_ships = {}
-        self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]
-        self.dragged_ship = None
-        self.drag_offset = None
-        self.initUI()
-        self.setFocusPolicy(Qt.StrongFocus)  # Добавляем возможность получать фокус
+        """
+        Конструктор экрана расстановки кораблей
+        
+        Инициализирует:
+        - Игровое поле
+        - Списки кораблей
+        - Пользовательский интерфейс
+        """
+        super().__init__()  # Вызов конструктора родительского класса
+        
+        # Настройка окна
+        self.setWindowTitle('Расстановка кораблей')  # Заголовок окна
+        self.setFixedSize(1000, 700)  # Фиксированный размер окна
+        
+        # Инициализация данных
+        self.placed_ships = []  # Список размещенных кораблей
+        self.available_ships = {}  # Словарь доступных кораблей по размерам
+        self.board = [[0 for _ in range(self.FIELD_SIZE)] for _ in range(self.FIELD_SIZE)]  # Игровое поле (0 = пусто, 1 = корабль)
+        self.dragged_ship = None  # Текущий перетаскиваемый корабль
+        self.drag_offset = None  # Смещение при перетаскивании
+        
+        # Создание интерфейса
+        self.initUI()  # Инициализация пользовательского интерфейса
+        self.setFocusPolicy(Qt.StrongFocus)  # Возможность получения фокуса для обработки клавиш
         
     def initUI(self):
         central_widget = QWidget()
